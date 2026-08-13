@@ -1,0 +1,2967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPELLBOUND — 단어의 탑</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg:        #04060a;   /* 캔버스 — 완전한 검정에 아주 옅은 청색 */
+    --pane:      #080c12;   /* 본체 패널 */
+    --pane-2:    #0b1119;   /* 한 단계 올라온 면 */
+    --pane-3:    #0f1721;   /* 입력·타일 */
+    --line:      #17202b;   /* 헤어라인 */
+    --line-2:    #253240;   /* 강한 헤어라인 */
+    --sky:       #3fb8f0;   /* 단일 액센트 */
+    --sky-hi:    #8fdcff;
+    --sky-lo:    #1d6f96;
+    --sky-wash:  rgba(63,184,240,.09);
+    --text:      #c6d3e0;
+    --white:     #eef5fb;
+    --dim:       #5f7183;
+    --dimmer:    #4b5a68;
+    --warn:      #e8663f;   /* 위험 — 적, 피해, 손실 */
+    --warn-wash: rgba(232,102,63,.10);
+    --gold:      #cfa04a;   /* 재화 전용 */
+    --ok:        #5fbf8e;   /* 확정·회복 전용 */
+    --mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", "Consolas", "Menlo", monospace;
+    --sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  }
+  html { height: 100%; background: var(--bg); }
+  body {
+    font-family: var(--sans);
+    background: transparent; color: var(--text);
+    min-height: 100%; padding: 22px 0 34px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 아주 옅은 주사선 — 콘솔 화면의 질감만 남긴다 */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    background: repeating-linear-gradient(180deg,
+      rgba(255,255,255,.017) 0 1px, transparent 1px 3px);
+  }
+
+  #root {
+    width: min(840px, 96vw); margin: 0 auto; position: relative;
+    background: var(--pane); border: 1px solid var(--line);
+  }
+
+  /* ---------- 상단 바 ---------- */
+  #app-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 0 12px; height: 38px;
+    border-bottom: 1px solid var(--line); background: var(--pane-2);
+  }
+  #app-bar .mark {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    letter-spacing: .26em; color: var(--sky);
+  }
+  #app-bar .mark s { text-decoration: none; color: var(--dimmer); margin: 0 8px; }
+  #app-bar .mark em { font-style: normal; font-family: var(--sans); font-weight: 600;
+                      font-size: 12px; letter-spacing: .02em; color: var(--dim); }
+
+  /* ---------- 음향 제어 ---------- */
+  #audio-ctl { position: relative; display: flex; gap: 0; }
+  #audio-ctl button {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; cursor: pointer;
+    height: 22px; padding: 0 9px; line-height: 1;
+    background: transparent; color: var(--dim);
+    border: 1px solid var(--line-2); border-right: none;
+    transition: color .12s, background .12s;
+  }
+  #audio-ctl button:last-of-type { border-right: 1px solid var(--line-2); }
+  #audio-ctl button:hover { color: var(--white); background: var(--pane-3); }
+  #audio-ctl button.off { color: var(--dimmer); text-decoration: line-through; }
+  #audio-ctl button.act { color: var(--bg); background: var(--sky); border-color: var(--sky); }
+
+  #vol-panel {
+    display: none; position: absolute; top: 28px; right: 0; z-index: 70;
+    background: var(--pane-2); border: 1px solid var(--line-2);
+    padding: 12px 13px 11px; width: 250px;
+  }
+  #vol-panel.show { display: block; }
+  #vol-panel .vhead {
+    font-size: 11px; letter-spacing: .01em;
+    color: var(--dim); padding-bottom: 8px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .vrow { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .vrow:last-of-type { margin-bottom: 0; }
+  .vrow .vlab { font-size: 11.5px; color: var(--text); width: 42px; flex-shrink: 0; }
+  .vrow .vnum {
+    font-family: var(--mono); font-size: 10.5px; color: var(--sky);
+    width: 26px; text-align: right;
+  }
+  .vrow input[type=range] {
+    flex: 1; -webkit-appearance: none; appearance: none; height: 2px; border-radius: 0;
+    background: var(--line-2); outline: none; cursor: pointer;
+  }
+  .vrow input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 3px; height: 13px; border-radius: 0;
+    background: var(--sky); border: none; cursor: pointer;
+  }
+  .vrow input[type=range]::-moz-range-thumb {
+    width: 3px; height: 13px; border-radius: 0; background: var(--sky);
+    border: none; cursor: pointer;
+  }
+  #vol-panel .vtip {
+    font-size: 10.5px; color: var(--dim); margin-top: 11px; padding-top: 9px;
+    border-top: 1px solid var(--line); line-height: 1.6;
+  }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border: 3px solid var(--pane); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--sky-lo); }
+  ::selection { background: var(--sky); color: var(--bg); }
+
+  .screen { display: none; padding: 18px 18px 22px; }
+  .screen.active { display: block; animation: fadeIn .22s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- 공통 조각 ---------- */
+  .panel { border: 1px solid var(--line); background: var(--pane-2); padding: 13px 15px 14px; margin-bottom: 12px; }
+  .panel h3 {
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--sans); font-size: 11.5px; font-weight: 600;
+    letter-spacing: .01em; color: var(--dim); margin-bottom: 11px;
+  }
+  .panel h3 i {
+    font-style: normal; font-family: var(--mono); font-size: 10px;
+    font-weight: 500; letter-spacing: .18em; color: var(--sky-lo);
+  }
+  .panel h3::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  button.big {
+    display: block; width: 100%; margin-top: 4px;
+    font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: .04em;
+    background: var(--sky); color: #02121b; border: none; border-radius: 0;
+    padding: 12px 0; cursor: pointer; transition: background .12s;
+  }
+  button.big:hover { background: var(--sky-hi); }
+  button.big:active { background: var(--sky-lo); }
+
+  /* ---------- 라인 아트 아이콘 ---------- */
+  .ico {
+    width: 100%; height: 100%; display: block;
+    fill: none; stroke: currentColor; stroke-width: 1.35;
+    stroke-linecap: round; stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* ---------- START ---------- */
+  #start { padding-top: 26px; }
+  .hero { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 18px; }
+  h1 {
+    font-family: var(--mono); font-size: clamp(26px, 6vw, 40px); font-weight: 700;
+    letter-spacing: .22em; color: var(--white); line-height: 1;
+  }
+  h1 .hl { color: var(--sky); }
+  .hero-sub {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .28em;
+    color: var(--dimmer); margin-top: 12px;
+  }
+  .hero-sub b { font-family: var(--sans); font-size: 13px; font-weight: 600;
+                letter-spacing: .01em; color: var(--text); }
+  .tagline { color: var(--dim); font-size: 12.5px; margin-top: 13px; line-height: 1.85; }
+  .logo-emoji { display: none; }
+  #result-emoji {
+    display: flex; align-items: center; justify-content: center;
+    width: 42px; height: 42px; padding: 8px; margin-bottom: 14px; color: var(--dim);
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+
+  .mode-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+  .mode-btn {
+    display: grid; grid-template-columns: 44px 1fr auto; gap: 15px; align-items: center;
+    width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+    background: var(--pane-2); border: 1px solid var(--line);
+    border-left: 2px solid var(--line-2); border-radius: 0;
+    padding: 16px 17px; transition: border-color .12s, background .12s;
+  }
+  .mode-btn:hover:not(:disabled) { border-color: var(--sky); border-left-color: var(--sky); background: var(--sky-wash); }
+  .mode-btn .mi { width: 44px; height: 44px; color: var(--dim); transition: color .12s; }
+  .mode-btn:hover:not(:disabled) .mi { color: var(--sky); }
+  .mode-btn .mt b { display: block; font-size: 16px; font-weight: 700; color: var(--white); }
+  .mode-btn .mt span { display: block; max-width: 64ch; font-size: 11.5px; color: var(--dim); margin-top: 5px; line-height: 1.75; }
+  .mode-btn .mg { font-family: var(--mono); font-size: 13px; color: var(--dimmer); }
+  .mode-btn:hover:not(:disabled) .mg { color: var(--sky); }
+  .mode-btn .mg.tag {
+    font-size: 9.5px; letter-spacing: .12em; color: var(--dimmer);
+    border: 1px solid var(--line-2); padding: 3px 8px;
+  }
+  .mode-btn.soon { cursor: default; opacity: .42; }
+  .mode-btn.soon .mt b { color: var(--dim); }
+
+  .start-foot {
+    display: flex; align-items: center; gap: 18px;
+    padding-top: 13px; border-top: 1px solid var(--line);
+  }
+  .link {
+    font-family: inherit; font-size: 12px; cursor: pointer; padding: 0;
+    background: none; border: none; color: var(--dim);
+    border-bottom: 1px solid var(--line-2); transition: color .12s, border-color .12s;
+  }
+  .link:hover { color: var(--sky); border-color: var(--sky); }
+  .cfg-now { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+
+  /* ---------- 설명서 · 설정 ---------- */
+  .sub-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px;
+  }
+  .sub-head h2 { font-size: 19px; font-weight: 700; color: var(--white); }
+  .lead { font-size: 13px; line-height: 1.95; color: var(--text); }
+  .lead b { color: var(--white); }
+  .keys { display: flex; flex-direction: column; gap: 1px; }
+  .krow { display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: center; padding: 6px 0; }
+  .krow .kk {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-align: center;
+    color: var(--sky); border: 1px solid var(--line-2); padding: 3px 0;
+  }
+  .krow .kd { font-size: 12px; color: var(--dim); }
+
+  .lang-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lang-card {
+    cursor: pointer; padding: 12px 13px; text-align: left;
+    background: var(--pane-3); border: 1px solid var(--line);
+    transition: border-color .12s, background .12s;
+  }
+  .lang-card:hover { border-color: var(--line-2); }
+  .lang-card.sel { border-color: var(--sky); background: var(--sky-wash); }
+  .lang-card .nm {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: .14em; color: var(--dim);
+  }
+  .lang-card.sel .nm { color: var(--sky); }
+  .lang-card .ds { font-size: 11.5px; color: var(--dim); margin-top: 6px; line-height: 1.7; }
+
+  .diff-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .diff-pick button {
+    font-family: inherit; font-size: 12.5px; cursor: pointer; flex: 1; min-width: 96px;
+    text-align: left; background: var(--pane-3); color: var(--text);
+    border: 1px solid var(--line); padding: 9px 11px; transition: border-color .12s, background .12s;
+  }
+  .diff-pick button:hover { border-color: var(--line-2); }
+  .diff-pick button .t { display: block; font-weight: 600; font-size: 13px; }
+  .diff-pick button .s { display: block; font-size: 10.5px; color: var(--dim); margin-top: 4px; line-height: 1.6; }
+  .diff-pick button.sel { border-color: var(--sky); background: var(--sky-wash); }
+  .diff-pick button.sel .t { color: var(--sky); }
+
+  .learn-note {
+    font-size: 11.5px; color: var(--dim); line-height: 1.85; margin-top: 11px;
+    padding-left: 11px; border-left: 1px solid var(--line-2);
+  }
+  .learn-note b { color: var(--text); font-weight: 600; }
+
+  .howto { font-size: 12px; line-height: 2.05; color: var(--text); }
+  .howto b { color: var(--white); font-weight: 600; }
+  .howto .g { color: var(--dim); }
+  .howto .p { color: var(--dim); }
+  .howto .g b, .howto .p b { color: var(--text); }
+  .howto k {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    color: var(--sky-lo); margin-right: 8px;
+  }
+
+  .vb-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #voice-select {
+    font-family: inherit; font-size: 12px; flex: 1; min-width: 170px;
+    background: var(--pane-3); color: var(--text);
+    border: 1px solid var(--line-2); border-radius: 0; padding: 7px 9px; cursor: pointer;
+  }
+  #voice-test {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .16em;
+    background: transparent; color: var(--sky);
+    border: 1px solid var(--sky-lo); border-radius: 0; padding: 7px 14px; cursor: pointer;
+  }
+  #voice-test:hover { background: var(--sky-wash); }
+  #voice-warn { font-size: 11.5px; color: var(--dim); line-height: 1.7; margin-top: 9px; }
+  #voice-warn b { color: var(--text); }
+  #voice-warn .fix { display: block; margin-top: 5px; font-size: 11px; color: var(--dimmer); }
+  .panel.no-voice { border-color: var(--warn); background: var(--warn-wash); }
+
+  /* ---------- BATTLE ---------- */
+  #battle.shake { animation: shake .3s steps(4, end); }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); } 50% { transform: translateX(5px); }
+    75% { transform: translateX(-3px); }
+  }
+  .hud {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding-bottom: 9px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
+  }
+  .hud-l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .2em; color: var(--dim); }
+  .hud-r { display: flex; align-items: center; gap: 14px; }
+  .lv-chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--sky);
+    border: 1px solid var(--sky-lo); padding: 2px 8px;
+  }
+  .combo-box { font-family: var(--mono); font-size: 9.5px; letter-spacing: .18em; color: var(--dimmer); }
+  .combo-box .num { font-size: 17px; font-weight: 700; color: var(--white); margin-left: 5px; }
+  .combo-pop { animation: pop .2s ease; display: inline-block; }
+  @keyframes pop { 0% { transform: scale(1.5); color: var(--sky); } 100% { transform: scale(1); } }
+
+  #expbar { height: 2px; background: var(--line); margin-bottom: 14px; }
+  #exp-fill { height: 100%; background: var(--sky-lo); width: 0%; transition: width .25s ease; }
+
+  /* 적 */
+  .boss-area {
+    position: relative; display: grid; grid-template-columns: 84px 1fr;
+    gap: 14px; align-items: center; margin-bottom: 14px;
+  }
+  .boss-info { min-width: 0; }
+  #boss-emoji {
+    width: 84px; height: 84px; padding: 16px; color: var(--warn);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+    animation: floaty 3.2s ease-in-out infinite;
+  }
+  @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  #boss-emoji.hit { animation: bossHit .22s steps(2, end); }
+  @keyframes bossHit {
+    0% { background: var(--sky); border-color: var(--sky-hi); }
+    100% { background: var(--pane-3); border-color: var(--line-2); }
+  }
+  #boss-emoji.attack { animation: bossAttack .34s ease; }
+  @keyframes bossAttack {
+    0% { transform: translateX(0); } 40% { transform: translateX(14px); border-color: var(--warn); }
+    100% { transform: translateX(0); }
+  }
+  .boss-name { font-size: 14px; font-weight: 600; color: var(--white); letter-spacing: .02em; }
+  .boss-name small { color: var(--dim); font-weight: 400; font-size: 11.5px; margin-left: 6px; }
+  .gimmick {
+    display: inline-block; font-size: 10.5px;
+    color: var(--dim); border: 1px solid var(--line-2); padding: 1px 7px; margin-top: 5px;
+  }
+  .gimmick.on { color: var(--warn); border-color: var(--warn); }
+  .hpbar { position: relative; height: 8px; background: var(--line); overflow: hidden; margin-top: 7px; }
+  .hpbar .fill { height: 100%; transition: width .25s ease; }
+  /* 눈금 — 막대가 계기처럼 읽히게 한다 */
+  .hpbar::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, transparent 0 7px, var(--pane) 7px 8px);
+  }
+  #boss-hp-fill { background: var(--warn); width: 100%; }
+  #player-hp-fill { background: var(--sky); width: 100%; }
+  .hp-num { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 5px; letter-spacing: .08em; }
+
+  /* 출제 */
+  .question-card {
+    position: relative; background: var(--pane-2); border: 1px solid var(--line);
+    padding: 15px 16px 16px;
+  }
+  .q-label { font-size: 11px; letter-spacing: .01em; color: var(--dim); }
+  .q-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 7px; }
+  #q-meaning { font-size: 30px; font-weight: 700; color: var(--white); letter-spacing: -.01em; }
+  #q-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    color: var(--dim); border: 1px solid var(--line-2); padding: 2px 7px; white-space: nowrap;
+  }
+  #q-hint {
+    font-family: var(--mono); font-size: 17px; letter-spacing: .34em;
+    color: var(--sky); margin-top: 11px; min-height: 24px;
+  }
+  #answer-reveal { color: var(--gold); font-weight: 700; letter-spacing: .12em; }
+
+  .speed-row {
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+    margin-top: 10px; height: 18px;
+  }
+  .speed-label { font-size: 10.5px; color: var(--dim); }
+  #speed-tag {
+    font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    color: var(--dim); min-width: 56px; text-align: right; padding: 1px 4px; transition: color .15s;
+  }
+  #speed-tag.hi  { color: var(--sky); }
+  #speed-tag.max { color: var(--bg); background: var(--sky); }
+
+  #timerbar { position: relative; height: 3px; background: var(--line); margin: 5px 0 11px; overflow: hidden; }
+  #timer-fill { height: 100%; background: var(--sky-lo); width: 100%; }
+
+  #word-input {
+    font-family: var(--mono); font-size: 21px; letter-spacing: .16em;
+    width: 100%; background: var(--pane-3); color: var(--white);
+    border: 1px solid var(--line-2); border-left: 2px solid var(--sky-lo); border-radius: 0;
+    padding: 11px 14px; outline: none; transition: border-color .15s;
+  }
+  #word-input::placeholder { color: var(--dimmer); letter-spacing: .04em; font-size: 14px; }
+  #word-input:focus { border-left-color: var(--sky); border-color: var(--line-2); border-left-width: 2px; }
+  #word-input.wrong { border-left-color: var(--warn); animation: shake .26s steps(4, end); }
+  #word-input.right { border-left-color: var(--ok); }
+  #word-input.buffed { border-left-color: var(--gold); border-left-width: 4px; }
+
+  .accent-row { margin-top: 7px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .accent-row button {
+    font-family: var(--mono); font-size: 14px;
+    background: var(--pane-3); color: var(--dim);
+    border: 1px solid var(--line); border-radius: 0;
+    width: 34px; height: 30px; cursor: pointer; transition: all .12s;
+  }
+  .accent-row button:hover { color: var(--sky); border-color: var(--sky-lo); }
+
+  /* 전리품 */
+  .pot-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 12px; padding: 9px 12px;
+    border: 1px solid var(--line-2); border-left: 2px solid var(--gold);
+    background: var(--pane-3); transition: border-color .2s, background .2s;
+  }
+  .pot-bar.hot   { border-left-color: var(--warn); }
+  .pot-bar.blaze { border-left-color: var(--warn); border-color: var(--warn); background: var(--warn-wash);
+                   animation: potPulse 1.1s steps(2, end) infinite; }
+  @keyframes potPulse { 0%,100% { border-left-color: var(--warn); } 50% { border-left-color: var(--gold); } }
+  .pot-bar .lbl { font-size: 11px; color: var(--dim); }
+  .pot-bar .amt { font-family: var(--mono); font-size: 19px; font-weight: 700; color: var(--gold); }
+  .pot-bar .amt.up { animation: potPop .25s ease; display: inline-block; }
+  @keyframes potPop { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+  .pot-bar .streak { font-family: var(--mono); font-size: 10.5px; color: var(--sky); }
+  .pot-bar .risk   { font-family: var(--mono); font-size: 10.5px; color: var(--warn); }
+  #bank-btn {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+    cursor: pointer; background: transparent; color: var(--gold);
+    border: 1px solid var(--gold); border-radius: 0; padding: 5px 12px;
+  }
+  #bank-btn:hover:not(:disabled) { background: var(--gold); color: #150d02; }
+  #bank-btn:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+  #bank-btn .kbd { opacity: .6; margin-left: 6px; }
+  .pot-line { font-size: 10.5px; width: 100%; line-height: 1.6; }
+  .pot-line.tense { color: var(--warn); }
+  .pot-line.calm  { color: var(--dim); }
+
+  /* 도박 */
+  .gamble-word { font-size: 27px; font-weight: 700; color: var(--white); margin: 6px 0 3px; }
+  .gamble-hint { font-family: var(--mono); font-size: 16px; letter-spacing: .5em; color: var(--sky); min-height: 22px; }
+  #gamble-input {
+    font-family: var(--mono); font-size: 19px; letter-spacing: .14em; text-align: center;
+    width: 100%; margin-top: 12px; background: var(--pane-3); color: var(--white);
+    border: 1px solid var(--line-2); border-bottom: 2px solid var(--gold); border-radius: 0;
+    padding: 10px 12px; outline: none;
+  }
+  #gamble-timer { height: 3px; background: var(--line); margin: 11px 0 2px; overflow: hidden; }
+  #gamble-fill { height: 100%; width: 100%; background: var(--gold); }
+  .stake { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--gold); }
+  .stake-sub { font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+  .verdict-win  { font-size: 16px; font-weight: 700; color: var(--ok); }
+  .verdict-lose { font-size: 16px; font-weight: 700; color: var(--warn); }
+  .encourage { font-size: 12px; color: var(--dim); margin-top: 10px; line-height: 1.75; }
+
+  /* 학습 단계 배지 */
+  .stage-badge {
+    display: inline-block; font-size: 10.5px; letter-spacing: .01em;
+    padding: 2px 8px; margin-bottom: 9px; border: 1px solid var(--line-2); color: var(--dim);
+  }
+  .stage-badge.s0 { color: var(--ok);   border-color: var(--ok); }
+  .stage-badge.s1 { color: var(--sky);  border-color: var(--sky-lo); }
+  .stage-badge.s2 { color: var(--gold); border-color: var(--gold); }
+  .stage-badge.s3 { color: var(--warn); border-color: var(--warn); }
+
+  #intro-box {
+    border: 1px solid var(--line-2); border-left: 2px solid var(--ok);
+    background: var(--pane-3); padding: 12px 14px; margin-top: 11px;
+  }
+  #intro-word { font-family: var(--mono); font-size: 27px; font-weight: 700; letter-spacing: .16em; color: var(--ok); }
+  #intro-tip { font-size: 11.5px; color: var(--dim); margin-top: 6px; line-height: 1.7; }
+  #intro-speak {
+    font-size: 11px; cursor: pointer;
+    background: transparent; color: var(--ok);
+    border: 1px solid var(--ok); border-radius: 0; padding: 5px 12px; margin-top: 9px;
+  }
+  #intro-speak:hover { background: rgba(95,191,142,.12); }
+
+  /* 객관식 */
+  .choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 11px; }
+  .choice {
+    font-family: var(--mono); font-size: 15px; cursor: pointer; text-align: left;
+    background: var(--pane-3); color: var(--text);
+    border: 1px solid var(--line); border-radius: 0; padding: 11px 12px 11px 34px;
+    transition: all .12s; position: relative;
+  }
+  .choice:hover:not(.locked) { border-color: var(--sky); color: var(--white); }
+  .choice .k { position: absolute; top: 50%; left: 12px; transform: translateY(-50%);
+               font-size: 10px; color: var(--dimmer); }
+  .choice.right { border-color: var(--ok); color: var(--ok); }
+  .choice.wrong { border-color: var(--warn); color: var(--warn); }
+  .choice.locked { cursor: default; }
+
+  /* 건너뛰기 */
+  .skip-row { display: flex; margin-top: 11px; }
+  #skip-btn {
+    font-family: var(--sans); font-size: 11px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    background: transparent; color: var(--dim);
+    border: 1px solid var(--line-2); border-radius: 0; padding: 7px 13px; transition: all .12s;
+  }
+  #skip-btn:hover:not(:disabled) { color: var(--text); border-color: var(--dim); }
+  #skip-btn:disabled { opacity: .35; cursor: default; }
+  #skip-btn .n { color: var(--sky); font-weight: 700; }
+  #skip-btn .kbd { font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); border: 1px solid var(--line-2); padding: 1px 5px; }
+
+  /* 스킬 */
+  .skill-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 11px; }
+  .skill {
+    cursor: pointer; text-align: left; position: relative;
+    background: var(--pane-3); border: 1px solid var(--line);
+    border-radius: 0; padding: 8px 9px; transition: all .12s;
+  }
+  .skill:hover:not(.off) { border-color: var(--sky); }
+  .skill.off { opacity: .3; cursor: default; }
+  .skill { display: grid; grid-template-columns: 22px 1fr; column-gap: 9px; align-items: center; }
+  .skill .ic { grid-row: 1 / 3; width: 22px; height: 22px; color: var(--dim); }
+  .skill:hover:not(.off) .ic { color: var(--sky); }
+  .skill .nm { grid-column: 2; font-size: 11.5px; font-weight: 600; color: var(--text); }
+  .skill .ch { grid-column: 2; font-family: var(--mono); font-size: 10px; color: var(--sky); display: block; margin-top: 2px; }
+  .skill .key {
+    position: absolute; top: 6px; right: 8px; font-family: var(--mono);
+    font-size: 9px; color: var(--dimmer);
+  }
+
+  .player-row {
+    display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center;
+    margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line);
+  }
+  .player-emoji {
+    width: 40px; height: 40px; padding: 7px; color: var(--sky);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  .player-emoji.hurt { animation: hurt .3s steps(2, end); }
+  @keyframes hurt {
+    0% { background: var(--warn); border-color: var(--warn); }
+    100% { background: var(--pane-3); border-color: var(--line-2); }
+  }
+  .player-bars { min-width: 0; }
+
+  .float-dmg {
+    position: absolute; font-family: var(--mono); font-weight: 700; font-size: 18px;
+    letter-spacing: .08em; pointer-events: none;
+    animation: floatUp .95s ease forwards; z-index: 5; white-space: nowrap;
+  }
+  @keyframes floatUp {
+    0%   { opacity: 0; transform: translateY(4px); }
+    18%  { opacity: 1; transform: translateY(-4px); }
+    100% { opacity: 0; transform: translateY(-42px); }
+  }
+
+  /* ---------- 오버레이 ---------- */
+  .overlay {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(2,4,7,.9); z-index: 50; padding: 18px;
+  }
+  .overlay.show { display: flex; animation: fadeIn .18s ease; }
+  .overlay .inner, .ov-card {
+    background: var(--pane); border: 1px solid var(--line-2);
+    padding: 20px 22px 22px; max-width: 460px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+  }
+  #banner .inner { border-left: 2px solid var(--warn); text-align: left; }
+  #banner .b-emoji {
+    width: 62px; height: 62px; padding: 12px; color: var(--warn); margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  #banner h2 {
+    font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
+    color: var(--warn); margin-bottom: 9px;
+  }
+  #banner .b-name { font-size: 20px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+  #banner p { color: var(--dim); font-size: 12.5px; line-height: 1.7; }
+  #banner .b-gim { font-family: var(--mono); font-size: 11px; color: var(--warn); margin-top: 9px; }
+
+  #levelup .inner { border-left: 2px solid var(--sky); }
+  #levelup h2 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .3em;
+    color: var(--sky); margin-bottom: 6px;
+  }
+  #levelup .lu-sub { font-size: 12px; color: var(--dim); margin-bottom: 14px; }
+  .lu-opts, .opt-list { display: flex; flex-direction: column; gap: 5px; }
+  .lu-opt, .opt {
+    cursor: pointer; text-align: left; display: grid;
+    grid-template-columns: 26px 1fr auto; gap: 11px; align-items: center;
+    background: var(--pane-2); border: 1px solid var(--line);
+    border-radius: 0; padding: 11px 13px; transition: all .12s;
+  }
+  .lu-opt:hover, .opt:hover:not(.dis) { border-color: var(--sky); background: var(--sky-wash); }
+  .lu-opt:hover .ic, .opt:hover:not(.dis) .ic { color: var(--sky); }
+  .opt.dis { opacity: .32; cursor: default; }
+  .lu-opt .ic, .opt .ic {
+    width: 26px; height: 26px; padding: 4px; color: var(--dim);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  /* 아이콘이 없는 선택지는 빈 네모가 남지 않게 자리를 접는다 */
+  .opt .ic:empty { width: 0; border: none; background: none; }
+  .lu-opt .tx b, .opt .tx b { font-size: 13px; font-weight: 600; color: var(--white); }
+  .lu-opt .tx span, .opt .tx span {
+    display: block; font-size: 11px; color: var(--dim); margin-top: 3px; line-height: 1.6;
+  }
+  .opt .price { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--gold); white-space: nowrap; }
+
+  .ov-card h2 { font-size: 19px; font-weight: 700; color: var(--white); margin-bottom: 5px; }
+  .ov-card .ov-sub { font-size: 12px; color: var(--dim); margin-bottom: 15px; line-height: 1.7; }
+  .ov-emoji {
+    width: 46px; height: 46px; padding: 9px; color: var(--sky); margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  .ov-btn {
+    font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: .02em; cursor: pointer;
+    background: var(--sky); color: #02121b; border: none; border-radius: 0;
+    padding: 11px 24px; margin-top: 15px; width: 100%;
+  }
+  .ov-btn:hover { background: var(--sky-hi); }
+  .ov-btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line-2); }
+  .ov-btn.ghost:hover { color: var(--text); border-color: var(--dim); }
+  .reward-line { font-size: 13px; margin: 6px 0; color: var(--text); }
+  .reward-line .g { font-family: var(--mono); color: var(--gold); font-weight: 700; }
+
+  /* ---------- MAP ---------- */
+  .map-hud {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap; padding-bottom: 10px;
+    border-bottom: 1px solid var(--line); margin-bottom: 12px;
+  }
+  .map-hud .left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .pill {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--dim);
+    border: none; background: none; padding: 0;
+  }
+  .pill b { font-weight: 500; color: var(--dimmer); margin-right: 6px; }
+  .pill.gold { color: var(--gold); }
+  .pill.hp   { color: var(--sky); }
+  .pill.lv   { color: var(--text); }
+
+  #relic-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  #relic-bar .rl {
+    position: relative; width: 28px; height: 28px; padding: 4px; color: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+    cursor: pointer; transition: border-color .12s;
+  }
+  #relic-bar .rl:hover { border-color: var(--gold); }
+  #relic-bar .none { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--dimmer); }
+  #relic-bar .rl-count {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    color: var(--dim); margin-right: 5px; cursor: pointer;
+  }
+  #relic-bar .rl-count:hover { color: var(--gold); }
+
+  .rl-tip {
+    display: none; position: absolute; top: 30px; right: 0; z-index: 30;
+    width: 250px; text-align: left; cursor: default;
+    background: var(--pane-2); border: 1px solid var(--line-2); border-left: 2px solid var(--gold);
+    padding: 11px 13px;
+  }
+  .rl:hover .rl-tip { display: block; }
+  .rl-tip b { display: block; font-size: 12.5px; color: var(--gold); line-height: 1.45; }
+  .rl-tip span { display: block; font-size: 11.5px; color: var(--text); line-height: 1.7; margin-top: 5px; }
+  .rl-tip em {
+    display: block; font-family: var(--mono); font-size: 10px; color: var(--dim);
+    font-style: normal; margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line);
+  }
+
+  .relic-row {
+    display: grid; grid-template-columns: 28px 1fr; gap: 11px; text-align: left;
+    background: var(--pane-2); border: 1px solid var(--line); padding: 11px 13px;
+  }
+  .relic-row.hl { border-color: var(--gold); background: rgba(207,160,74,.07); }
+  .relic-row .ic {
+    width: 28px; height: 28px; padding: 4px; color: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  .relic-row .tx b { font-size: 13px; color: var(--white); }
+  .relic-row .tx .ds { display: block; font-size: 11.5px; color: var(--dim); margin-top: 4px; line-height: 1.7; }
+  .relic-row .tx .fl { display: block; font-family: var(--mono); font-size: 10px; color: var(--sky-lo); margin-top: 6px; }
+
+  .map-tip { font-family: var(--mono); font-size: 10px; color: var(--dimmer); margin-top: 11px; letter-spacing: .04em; }
+  .map-tip b { color: var(--dim); font-weight: 500; }
+
+  /* 탑 — 1층이 아래, 꼭대기가 위 */
+  .map-scroll {
+    display: flex; flex-direction: column-reverse;
+    max-height: 58vh; overflow-y: auto;
+    border: 1px solid var(--line); background: var(--bg); padding: 4px 0;
+  }
+  .floor { display: grid; grid-template-columns: 46px 1fr; align-items: stretch; }
+  .floor .fno {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--dimmer);
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 11px 0 6px; border-right: 1px solid var(--line);
+  }
+  .floor .nodes { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5px; padding: 4px 6px; }
+  .floor.cur { background: var(--sky-wash); }
+  .floor.cur .fno { color: var(--sky); border-right-color: var(--sky-lo); }
+  .floor.cur .fno::before { content: "\25B8"; margin-right: 5px; }
+
+  .node {
+    display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto;
+    column-gap: 10px; align-items: center; text-align: left; cursor: default;
+    background: transparent; border: 1px solid var(--line);
+    padding: 7px 9px; opacity: .38; transition: all .12s;
+  }
+  .node .ne {
+    grid-row: 1 / 3; width: 30px; height: 30px; padding: 4px; color: var(--dim);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--pane-3); border: 1px solid var(--line-2);
+  }
+  .node .nn { grid-column: 2; font-size: 11.5px; font-weight: 600; color: var(--text); }
+  .node .ns { grid-column: 2; font-family: var(--mono); font-size: 9.5px; color: var(--dim); margin-top: 2px; }
+  .floor.cur .node { opacity: 1; cursor: pointer; border-color: var(--line-2); background: var(--pane-2); }
+  .floor.cur .node:hover { border-color: var(--sky); background: var(--sky-wash); }
+  .floor.cur .node:hover .nn { color: var(--sky); }
+  .floor.cur .node:hover .ne { color: var(--sky); }
+  .node.done { opacity: .8; border-color: var(--line); }
+  .node.done .nn { color: var(--dim); }
+  .node.done .ne { border-color: var(--sky-lo); }
+  .node.skipped { opacity: .12; }
+  .node.boss { border-color: var(--warn); }
+  .node.boss .ne { border-color: var(--warn); color: var(--warn); }
+  .floor.cur .node.boss:hover { border-color: var(--warn); background: var(--warn-wash); }
+  .floor.cur .node.boss:hover .nn { color: var(--warn); }
+
+  /* ---------- RESULT ---------- */
+  #result h2 {
+    font-family: var(--mono); font-size: 25px; font-weight: 700; letter-spacing: .18em;
+    color: var(--white); margin-bottom: 9px;
+  }
+  #result .sub { color: var(--dim); font-size: 12.5px; padding-bottom: 16px;
+                 border-bottom: 1px solid var(--line); margin-bottom: 16px; line-height: 1.7; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+           border-top: 1px solid var(--line); border-left: 1px solid var(--line); margin-bottom: 14px; }
+  .stat { background: var(--pane-2); padding: 11px 12px;
+          border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stat .v { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--sky); }
+  .stat .k { font-size: 10.5px; color: var(--dim); margin-top: 4px; }
+  .review { background: var(--pane-2); border: 1px solid var(--line); padding: 13px 15px; margin-bottom: 14px; }
+  .review h3 {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11.5px; font-weight: 600; color: var(--dim); margin-bottom: 10px;
+  }
+  .review h3::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  #review-list { max-height: 208px; overflow-y: auto; }
+  .review .item {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 8px 2px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  }
+  .review .item:last-child { border-bottom: none; }
+  .review .item:hover .w { color: var(--sky); }
+  .review .item .w { font-family: var(--mono); font-weight: 700; color: var(--text); transition: color .12s; }
+  .review .item .m { color: var(--dim); font-size: 12.5px; text-align: right; }
+  .review .item .why {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+    padding: 1px 6px; margin-right: 7px; white-space: nowrap; border: 1px solid;
+  }
+  .review .item .why.skip  { color: var(--dim);  border-color: var(--line-2); }
+  .review .item .why.wrong { color: var(--warn); border-color: var(--warn); }
+  .review .empty { color: var(--dim); font-size: 12.5px; line-height: 1.7; }
+  .review-tip { font-family: var(--mono); font-size: 10px; color: var(--dimmer); margin-top: 9px; }
+
+  @media (max-width: 560px) {
+    .lang-pick { grid-template-columns: 1fr; }
+    .skill-row { grid-template-columns: repeat(2, 1fr); }
+    .floor .nodes { grid-auto-flow: row; grid-auto-columns: auto; }
+    #q-meaning { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+<div id="root">
+
+<div id="app-bar">
+  <span class="mark">SPELLBOUND<s>▸</s><em>단어의 탑</em></span>
+<div id="audio-ctl">
+  <button id="sfx-btn" type="button" title="타건음·효과음 켜기/끄기" onclick="toggleSfx()">SFX</button>
+  <button id="bgm-btn" type="button" title="배경음악 켜기/끄기" onclick="toggleBgm()">BGM</button>
+  <button id="vol-btn" type="button" title="볼륨 조절" onclick="toggleVolPanel()">VOL</button>
+
+  <div id="vol-panel">
+    <div class="vhead">볼륨</div>
+    <div class="vrow">
+      <span class="vlab">전체</span>
+      <input id="mst-range" type="range" min="0" max="100" value="85"
+             oninput="setVol('master', this.value)">
+      <span class="vnum" id="mst-val">85</span>
+    </div>
+    <div class="vrow">
+      <span class="vlab">효과음</span>
+      <input id="sfx-range" type="range" min="0" max="100" value="50"
+             oninput="setVol('sfx', this.value)">
+      <span class="vnum" id="sfx-val">50</span>
+    </div>
+    <div class="vrow">
+      <span class="vlab">배경음</span>
+      <input id="bgm-range" type="range" min="0" max="100" value="85"
+             oninput="setVol('bgm', this.value)">
+      <span class="vnum" id="bgm-val">85</span>
+    </div>
+    <div class="vrow">
+      <span class="vlab">발음</span>
+      <input id="speech-range" type="range" min="0" max="100" value="40"
+             oninput="setVol('speech', this.value)">
+      <span class="vnum" id="speech-val">40</span>
+    </div>
+    <div class="vtip">슬라이더를 움직이면 소리를 미리 들려줍니다. 0으로 내리면 음소거됩니다.</div>
+  </div>
+</div>
+</div>
+
+  <!-- ============ START ============ -->
+  <div id="start" class="screen active">
+    <div class="hero">
+      <div class="logo-emoji"></div>
+      <h1>SPELL<span class="hl">BOUND</span></h1>
+      <div class="hero-sub"><b>단어의 탑</b> &nbsp;/&nbsp; TOWER OF WORDS</div>
+      <p class="tagline">한글 뜻만 보고 외국어 철자를 떠올려 타이핑한다. 맞히면 공격, 틀리면 반격.</p>
+    </div>
+
+    <div class="mode-list">
+      <button type="button" class="mode-btn" id="mode-beginner" onclick="startMode('beginner')">
+        <span class="mi" data-ico="steps"></span>
+        <span class="mt"><b>비기너 모드</b>
+          <span>철자와 발음을 먼저 보여주고 따라 치기부터 시작합니다. 쉬운 단어만 나오고 전리품을 잃거나 골드를 거는 요소가 없습니다.</span></span>
+        <span class="mg">▸</span>
+      </button>
+      <button type="button" class="mode-btn" id="mode-normal" onclick="startMode('normal')">
+        <span class="mi" data-ico="tower"></span>
+        <span class="mt"><b>노말 모드</b>
+          <span>첫 두 글자 힌트만 주고 바로 입력합니다. 전 난이도 단어와 전리품·도박 요소가 모두 들어갑니다.</span></span>
+        <span class="mg">▸</span>
+      </button>
+      <button type="button" class="mode-btn soon" id="mode-custom" disabled>
+        <span class="mi" data-ico="sliders"></span>
+        <span class="mt"><b>커스텀 모드</b>
+          <span>단어장·출제 규칙·유물 풀을 직접 고르는 모드입니다.</span></span>
+        <span class="mg tag">출시 예정</span>
+      </button>
+    </div>
+
+    <div class="start-foot">
+      <button type="button" class="link" id="link-guide" onclick="showGuide()">설명서</button>
+      <button type="button" class="link" id="link-settings" onclick="showSettings()">설정</button>
+      <span class="cfg-now" id="cfg-now">영어 · 보통</span>
+    </div>
+  </div>
+
+  <!-- ============ 설명서 ============ -->
+  <div id="guide" class="screen">
+    <div class="sub-head">
+      <h2>설명서</h2>
+      <button type="button" class="link" id="guide-back" onclick="backToStart()">← 메인으로</button>
+    </div>
+
+    <div class="panel">
+      <h3><i>01</i>한 줄 요약</h3>
+      <p class="lead">화면에는 <b>한글 뜻만</b> 나옵니다. 외국어 철자를 스스로 떠올려 입력하면 그게 곧 공격이고,
+        틀리거나 시간이 지나면 적이 반격합니다. 베껴 쓰는 타자 연습이 아니라 <b>기억에서 꺼내는</b> 연습입니다.</p>
+    </div>
+
+    <div class="panel">
+      <h3><i>02</i>단어가 어려워지는 순서</h3>
+      <div class="howto">
+        <span class="g howto-novice"><k>1단계</k>처음 보는 단어는 <b>철자·발음을 보여준 뒤 따라 치기</b> — 페널티 없음<br></span>
+        <span class="g howto-novice"><k>2단계</k>같은 단어를 다시 만나면 <b>객관식 → 힌트 타이핑 → 완전 회상</b>으로 승급<br></span>
+        <span class="g howto-normal"><k>1단계</k>처음 보는 단어는 <b>첫 두 글자 힌트</b>와 함께 나옵니다<br></span>
+        <span class="g howto-normal"><k>2단계</k>한 번 맞히면 다음부터는 <b>뜻만 보고 입력</b>하는 완전 회상 단계로<br></span>
+        <k>보상</k>도움을 덜 받고 맞힐수록 데미지가 커집니다 — 제대로 외우는 쪽이 더 빠릅니다<br>
+        <k>기록</k>숙련도는 탭을 닫기 전까지 이어집니다. 다음 판에도 같은 단계에서 시작합니다<br>
+        <span class="g" id="howto-es"><k>ES</k>강세부호(á í ñ)는 생략해도 정답, 정확히 쓰면 데미지 +50%<br></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i>03</i>탑과 경로</h3>
+      <div class="howto">
+        <k>탑</k>16층까지 오릅니다. 매 층 <b>갈림길에서 하나만</b> 고를 수 있습니다<br>
+        <k>노드</k>전투 · 엘리트 · 상점 · 휴식 · 이벤트 · 보물 — 5·10·15층은 보스<br>
+        <k>유물</k>유물은 타자 규칙 자체를 바꿉니다. 조합에 따라 매판 플레이가 달라집니다<br>
+        <k>유물</k>맵에서 <b>R</b> 키를 누르면 지금 들고 있는 유물과 효과를 볼 수 있습니다<br>
+        <k>레벨</k>정답마다 EXP를 얻고, 레벨업 때 강화 하나를 고릅니다<br>
+        <k>사망</k>체력이 0이 되면 모험이 끝나고 탑은 처음부터 다시 짜입니다<br>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i>04</i>데미지 계산</h3>
+      <div class="howto">
+        <k>속도</k><b>빠를수록 데미지가 계속 오릅니다</b> — 남은 시간에 비례해 최대 2배<br>
+        <k>정확</k>수정 없이 한 번에 치면 속도 보너스 전액, 고쳐 치면 절반만 받습니다<br>
+        <k>콤보</k>연속으로 맞힐수록 데미지가 올라갑니다<br>
+        <k>단계</k>도움을 많이 받은 단어일수록 데미지 배수가 낮습니다<br>
+      </div>
+    </div>
+
+    <div class="panel howto-gamble">
+      <h3><i>05</i>전리품과 도박</h3>
+      <div class="howto">
+        <k>적립</k>맞힐수록 <b>미확정 전리품</b>이 불어나고 그만큼 공격력도 오릅니다<br>
+        <k>소멸</k>한 번 틀리면 전리품이 전액 사라집니다<br>
+        <k>회수</k><b>Esc</b>로 언제든 회수해 골드로 확정할 수 있습니다 (연속 기록은 초기화)<br>
+        <k>배팅</k>전투가 끝나면 보상을 <b>두 배로 걸 수</b> 있습니다 — 전투당 딱 한 번<br>
+        <k>비기너</k>비기너 모드에서는 이 항목이 전부 빠집니다<br>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i>06</i>단축키</h3>
+      <div class="keys">
+        <div class="krow"><span class="kk">Enter</span><span class="kd">입력한 철자를 제출한다</span></div>
+        <div class="krow"><span class="kk">Tab</span><span class="kd">모르는 단어를 건너뛴다 (정답과 발음 확인)</span></div>
+        <div class="krow"><span class="kk">Esc</span><span class="kd">쌓인 전리품을 회수해 골드로 확정한다</span></div>
+        <div class="krow"><span class="kk">1 2 3 4</span><span class="kd">스킬 사용 — 힌트 · 시간 · 회복 · 강타</span></div>
+        <div class="krow"><span class="kk">R</span><span class="kd">맵에서 보유 유물 목록을 연다</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 설정 ============ -->
+  <div id="settings" class="screen">
+    <div class="sub-head">
+      <h2>설정</h2>
+      <button type="button" class="link" id="settings-back" onclick="backToStart()">← 메인으로</button>
+    </div>
+
+    <div class="panel">
+      <h3><i>01</i>언어</h3>
+      <div class="lang-pick">
+        <div class="lang-card sel" id="lang-en" onclick="pickLang('en')">
+          <div class="nm">ENGLISH</div>
+          <div class="ds">영어 250단어 · 기초 명사에서 고급 동사까지 5단계</div>
+        </div>
+        <div class="lang-card" id="lang-es" onclick="pickLang('es')">
+          <div class="nm">ESPAÑOL</div>
+          <div class="ds">스페인어 A2 250단어 · 강세부호와 명사 성(el/la)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i>02</i>난이도</h3>
+      <div class="diff-pick">
+        <button id="diff-easy"   onclick="pickDiff('easy')"><span class="t">여유</span><span class="s">제한시간 +40%</span></button>
+        <button id="diff-normal" class="sel" onclick="pickDiff('normal')"><span class="t">보통</span><span class="s">기본</span></button>
+        <button id="diff-hard"   onclick="pickDiff('hard')"><span class="t">지옥</span><span class="s">제한시간 -30% · 반격 강화</span></button>
+      </div>
+    </div>
+
+    <div class="panel" id="voice-box">
+      <h3><i>03</i>발음 음성</h3>
+      <div class="vb-row">
+        <select id="voice-select" onchange="onVoiceChange()"></select>
+        <button type="button" id="voice-test" onclick="testVoice()">TEST</button>
+      </div>
+      <div id="voice-warn">음성을 찾는 중…</div>
+    </div>
+  </div>
+
+  <!-- ============ MAP ============ -->
+  <div id="map" class="screen">
+    <div class="map-hud">
+      <div class="left">
+        <span class="pill"><b>FLOOR</b><span id="map-floor">1</span> / 16</span>
+        <span class="pill hp"><b>HP</b><span id="map-hp">100/100</span></span>
+        <span class="pill gold"><b>GOLD</b><span id="map-gold">0</span></span>
+        <span class="pill lv"><b>LV</b><span id="map-lv">1</span></span>
+      </div>
+      <div id="relic-bar"><span class="none">NO RELIC</span></div>
+    </div>
+    <div class="map-scroll" id="map-scroll"></div>
+    <div class="map-tip">유물에 마우스를 올리면 효과가 보이고, 클릭하거나 <b>R</b> 키를 누르면 전체 목록이 열립니다.</div>
+  </div>
+
+  <!-- ============ BATTLE ============ -->
+  <div id="battle" class="screen">
+    <div class="hud">
+      <div class="hud-l" id="stage-label">STAGE 1 / 6</div>
+      <div class="hud-r">
+        <span class="lv-chip" id="lv-chip">Lv.1</span>
+        <span class="combo-box">COMBO<span class="num" id="combo-num">0</span></span>
+      </div>
+    </div>
+    <div id="expbar"><div id="exp-fill"></div></div>
+
+    <div class="boss-area">
+      <span id="boss-emoji"></span>
+      <div class="boss-info">
+        <div class="boss-name" id="boss-name">Slime King</div>
+        <div><span class="gimmick" id="boss-gimmick">기본</span></div>
+        <div class="hpbar"><div class="fill" id="boss-hp-fill"></div></div>
+        <div class="hp-num" id="boss-hp-num"></div>
+      </div>
+    </div>
+
+    <div class="question-card">
+      <div class="stage-badge s3" id="stage-badge">④ 완전 회상</div>
+      <div class="q-label" id="q-label">이 뜻의 영어 단어는?</div>
+      <div class="q-row">
+        <div id="q-meaning">사과</div>
+        <div id="q-tag">명사</div>
+      </div>
+
+      <div id="intro-box" style="display:none">
+        <div id="intro-word">apple</div>
+        <div id="intro-tip">처음 보는 단어예요. 아래에 그대로 따라 입력해 보세요 (틀려도 손해 없음)</div>
+        <button type="button" id="intro-speak" onclick="speak(S.word.w)">▸ 발음 듣기</button>
+      </div>
+
+      <div id="q-hint">a _ _ _ _</div>
+      <div class="speed-row">
+        <span class="speed-label">속도 보너스</span>
+        <span id="speed-tag">+0%</span>
+      </div>
+      <div id="timerbar"><div id="timer-fill"></div></div>
+      <input id="word-input" type="text" autocomplete="off" spellcheck="false" placeholder="철자를 입력하고 Enter" />
+      <div class="choice-row" id="choice-row" style="display:none"></div>
+      <div class="accent-row" id="accent-row"></div>
+      <div class="pot-bar" id="pot-bar">
+        <span class="lbl" id="pot-label">미확정 전리품</span>
+        <span class="amt" id="pot-amt">0</span>
+        <span class="streak" id="pot-streak"></span>
+        <span class="risk" id="pot-risk"></span>
+        <button type="button" id="bank-btn" onclick="bankPot(false)" disabled>
+          회수<span class="kbd">Esc</span>
+        </button>
+        <div class="pot-line calm" id="pot-line">맞힐수록 불어나지만, 한 번 틀리면 전부 사라집니다.</div>
+      </div>
+
+      <div class="skip-row">
+        <button type="button" id="skip-btn" onclick="skipWord()">
+          <span>모르겠어요</span>
+          <span class="kbd">Tab</span>
+          <span>남은 <span class="n" id="skip-n">3</span>회</span>
+        </button>
+      </div>
+      <div class="skill-row" id="skill-row"></div>
+    </div>
+
+    <div class="player-row">
+      <div class="player-emoji" id="player-emoji"></div>
+      <div class="player-bars">
+        <div class="hpbar"><div class="fill" id="player-hp-fill"></div></div>
+        <div class="hp-num" id="player-hp-num"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RESULT ============ -->
+  <div id="result" class="screen">
+    <div class="logo-emoji" id="result-emoji"></div>
+    <h2 id="result-title">CLEAR</h2>
+    <p class="sub" id="result-sub">모든 보스를 무찔렀습니다!</p>
+    <div class="stats">
+      <div class="stat"><div class="v" id="st-boss">1층</div><div class="k">도달 층</div></div>
+      <div class="stat"><div class="v" id="st-lv">1</div><div class="k">도달 레벨</div></div>
+      <div class="stat"><div class="v" id="st-combo">0</div><div class="k">최대 콤보</div></div>
+      <div class="stat"><div class="v" id="st-acc">0%</div><div class="k">정답률</div></div>
+      <div class="stat"><div class="v" id="st-crit">0</div><div class="k">PERFECT</div></div>
+      <div class="stat"><div class="v" id="st-speed">0%</div><div class="k">평균 속도 보너스</div></div>
+      <div class="stat"><div class="v" id="st-words">0</div><div class="k">맞힌 단어</div></div>
+      <div class="stat"><div class="v" id="st-skip">0</div><div class="k">건너뛴 단어</div></div>
+      <div class="stat"><div class="v" id="st-new">0</div><div class="k">새로 익힌 단어</div></div>
+      <div class="stat"><div class="v" id="st-master">0</div><div class="k">완전 숙달</div></div>
+      <div class="stat"><div class="v" id="st-peak">0</div><div class="k">최대 전리품</div></div>
+      <div class="stat"><div class="v" id="st-lost">0</div><div class="k">날린 골드</div></div>
+      <div class="stat"><div class="v" id="st-gamble">0승 0패</div><div class="k">도박 전적</div></div>
+    </div>
+    <div class="review">
+      <h3>오답노트 — 복습할 단어</h3>
+      <div id="review-list"></div>
+      <div class="review-tip">단어를 클릭하면 발음을 들려줍니다</div>
+    </div>
+    <button class="big" onclick="backToStart()">▸ 다시 도전</button>
+  </div>
+</div>
+
+<!-- overlays -->
+<div id="banner" class="overlay"><div class="inner">
+  <div class="b-emoji" id="banner-emoji"></div>
+  <h2 id="banner-title">STAGE 1</h2>
+  <div class="b-name" id="banner-name">Slime King</div>
+  <p id="banner-sub">슬라임 킹이 나타났다!</p>
+  <div class="b-gim" id="banner-gim"></div>
+</div></div>
+
+<div id="levelup" class="overlay"><div class="inner">
+  <h2 id="lu-title">LEVEL UP</h2>
+  <div class="lu-sub" id="lu-sub">스킬 하나를 선택하세요</div>
+  <div class="lu-opts" id="lu-opts"></div>
+</div></div>
+
+<!-- 노드 패널: 보상 / 상점 / 휴식 / 이벤트 / 보물 -->
+<div id="panel" class="overlay"><div class="ov-card">
+  <div class="ov-emoji" id="pn-emoji"></div>
+  <h2 id="pn-title">보상</h2>
+  <div class="ov-sub" id="pn-sub"></div>
+  <div class="opt-list" id="pn-opts"></div>
+  <div id="pn-foot"></div>
+</div></div>
+
+<script>
+/*__WORDDATA__*/
+
+/* ============ CONFIG ============ */
+const LANGS = {
+  en: {
+    label: "영어", flag: "🇺🇸", bank: WORDS_EN,
+    qLabel: "이 뜻의 영어 단어는?", speechLang: "en",
+    accents: [], hasAccentRule: false,
+    hero: "heroEn", voicePrefer: ["google","natural","neural","premium","enhanced","microsoft"]
+  },
+  es: {
+    label: "스페인어", flag: "🇪🇸", bank: WORDS_ES,
+    qLabel: "이 뜻의 스페인어는?", speechLang: "es",
+    accents: ["á","é","í","ó","ú","ñ","ü","¿","¡"], hasAccentRule: true,
+    hero: "heroEs", voicePrefer: ["google","natural","neural","premium","enhanced","microsoft"]
+  }
+};
+
+const DIFF = {
+  easy:   { timeMul: 1.4, dmgMul: 0.7, skips: 5, label: "여유" },
+  normal: { timeMul: 1.0, dmgMul: 1.0, skips: 3, label: "보통" },
+  hard:   { timeMul: 0.7, dmgMul: 1.4, skips: 2, label: "지옥" }
+};
+
+/* 스킬 정의 */
+const SKILLS = {
+  hint:  { ic:"glass", nm:"힌트",   key:"1", desc:"다음 글자를 하나 더 공개한다", max:9 },
+  time:  { ic:"clock", nm:"시간",   key:"2", desc:"제한시간을 5초 늘린다",       max:9 },
+  heal:  { ic:"cross", nm:"회복",   key:"3", desc:"체력을 30 회복한다",          max:9 },
+  power: { ic:"burst", nm:"강타",   key:"4", desc:"다음 정답의 데미지가 3배",    max:9 }
+};
+
+/* 레벨업 선택지 */
+const LEVEL_OPTIONS = [
+  { id:"hint",   ic:"glass", t:"힌트 +2회",      d:"글자 하나를 더 공개하는 스킬 사용 횟수 +2" },
+  { id:"time",   ic:"clock", t:"시간 연장 +2회",  d:"제한시간을 5초 늘리는 스킬 사용 횟수 +2" },
+  { id:"heal",   ic:"cross", t:"회복 +2회",      d:"체력을 30 회복하는 스킬 사용 횟수 +2" },
+  { id:"power",  ic:"burst", t:"강타 +2회",      d:"다음 정답 데미지 3배 스킬 사용 횟수 +2" },
+  { id:"maxhp",  ic:"heart", t:"최대 체력 +20",  d:"최대 HP가 20 늘고 그만큼 즉시 회복된다" },
+  { id:"attack", ic:"sword", t:"공격력 +4",      d:"모든 공격의 기본 데미지가 4 증가한다" },
+  { id:"clock",  ic:"hour", t:"제한시간 +1.5초", d:"모든 문제의 제한시간이 1.5초씩 늘어난다" }
+];
+
+const EXP_PER_LEVEL = 100;
+
+/* =====================================================================
+   AUDIO — 외부 파일 없이 Web Audio 로 타건음과 BGM 을 만든다.
+   브라우저 자동재생 정책 때문에 첫 사용자 조작 전에는 소리가 나지 않는다.
+   ===================================================================== */
+const AUDIO = (function(){
+  let ctx = null, master = null, sfxBus = null, bgmBus = null, noiseBuf = null;
+  let sfxOn = true, bgmOn = true;
+  let mstVol = 0.85, sfxVol = 0.50, bgmVol = 0.85;   // 사용자 조절 볼륨 (0~1)
+  let spVol = 0.40;                                   // 발음(TTS) 볼륨 — 기본을 낮게 잡는다
+  let sceneGain = 0;                                  // 현재 장면의 기본 음량
+  let scene = null, timer = null, step = 0;
+
+  function ensure(){
+    if(ctx) return ctx;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = mstVol; master.connect(ctx.destination);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = sfxOn ? sfxVol : 0; sfxBus.connect(master);
+      bgmBus = ctx.createGain(); bgmBus.gain.value = 0;            // 장면 시작 시 페이드인
+      bgmBus.connect(master);
+      // 타건음용 노이즈 버퍼는 한 번만 만들어 재사용한다
+      const n = Math.floor(ctx.sampleRate * 0.12);
+      noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/n, 2);
+    }catch(e){ ctx = null; }
+    return ctx;
+  }
+  function resume(){ const c = ensure(); if(c && c.state === "suspended") c.resume(); }
+
+  function tone(o){
+    const c = ensure(); if(!c || !sfxOn) return;
+    const t = c.currentTime + (o.when || 0);
+    const dur = o.dur || 0.09;
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || "square";
+    osc.frequency.setValueAtTime(o.freq, t);
+    if(o.to) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.gain || 0.18, t + (o.atk == null ? 0.006 : Math.max(0.0008, o.atk)));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(o.bus || sfxBus);
+    osc.start(t); osc.stop(t + dur + 0.03);
+  }
+  function noise(o){
+    const c = ensure(); if(!c || !sfxOn || !noiseBuf) return;
+    const t = c.currentTime + ((o && o.when) || 0);
+    const src = c.createBufferSource(); src.buffer = noiseBuf;
+    const f = c.createBiquadFilter();
+    f.type = (o && o.type) || "bandpass";
+    f.frequency.value = (o && o.freq) || 2200;
+    f.Q.value = (o && o.q) || 1.1;
+    const g = c.createGain();
+    g.gain.setValueAtTime((o && o.gain) || 0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + ((o && o.dur) || 0.05));
+    src.connect(f); f.connect(g); g.connect(sfxBus);
+    src.start(t); src.stop(t + 0.14);
+  }
+
+  /* ---------- 효과음 ---------- */
+  const SFX = {
+    key(){                                  // 글자 하나 입력 — 3중 레이어 "톡!"
+      const r = Math.random();
+      // 1) 어택 클릭: 손톱이 키캡에 닿는 순간의 고역 성분
+      noise({ freq: 2400 + r*1200, q: 0.7, type: "highpass", gain: 0.13, dur: 0.013 });
+      // 2) 바디 톡: 키가 바닥을 치는 저역 — 급강하 피치가 타격감을 만든다
+      tone({ freq: 200 + r*40, to: 60, dur: 0.050, type: "triangle", gain: 0.155, atk: 0.0012 });
+      // 3) 하우징 울림: 케이스가 함께 떨리는 중역
+      tone({ freq: 430 + r*90, to: 240, dur: 0.028, type: "square", gain: 0.055, atk: 0.0012 });
+    },
+    back(){                                 // 지우기 — 되감는 듯한 역방향 느낌
+      noise({ freq: 1100, q: 0.8, type: "highpass", gain: 0.07, dur: 0.016 });
+      tone({ freq: 120, to: 190, dur: 0.045, type: "triangle", gain: 0.085, atk: 0.0012 });
+    },
+    // 단어 완성 — "드르르르륵 딴단딴" (끄투온라인 풍 롤 + 3연타 마무리)
+    wordDone(bonus){
+      const b = Math.max(0, Math.min(1, bonus || 0));
+      // 1) 드르르르륵 — 점점 빨라지는 롤. 빠르게 칠수록 타수가 늘어난다
+      const N = 9 + Math.round(b * 5);
+      let t = 0, gap = 0.028;
+      for(let i = 0; i < N; i++){
+        const p = N > 1 ? i / (N - 1) : 1;
+        noise({ freq: 1500 + p*1900, q: 1.0, gain: 0.048 + p*0.042, dur: 0.020, when: t });
+        tone({ freq: 300 + p*280, dur: 0.017, type: "square", gain: 0.028 + p*0.030, when: t, atk: 0.001 });
+        t += gap;
+        gap *= 0.88;                        // 가속
+      }
+      // 2) 딴 - 단 - 딴 마무리. 속도 등급이 높을수록 높은 조성으로 해결된다
+      const root = 523.25 * (b >= 0.70 ? 1.5 : (b >= 0.45 ? 1.25 : 1));
+      const acc = t + 0.045;
+      const kick = (when, mul, g, dur) => {
+        noise({ freq: 2600, q: 0.7, type: "highpass", gain: g*0.45, dur: 0.018, when });
+        tone({ freq: root*mul, dur: dur, type: "triangle", gain: g, when, atk: 0.0015 });
+        tone({ freq: root*mul*2, dur: dur*0.5, type: "square", gain: g*0.30, when, atk: 0.0015 });
+      };
+      kick(acc,         1.00, 0.20, 0.12);   // 딴
+      kick(acc + 0.100, 0.84, 0.15, 0.09);   // 단
+      kick(acc + 0.185, 1.50, 0.22, 0.22);   // 딴——
+      if(b >= 0.70) tone({ freq: root*3, dur: 0.26, type: "triangle", gain: 0.09, when: acc + 0.185, atk: 0.002 });
+    },
+    correct(bonus){ SFX.wordDone(bonus); },  // 구버전 호출 호환
+    wrong(){
+      tone({ freq: 150, to: 90, dur: 0.20, type: "sawtooth", gain: 0.16 });
+      noise({ freq: 380, gain: 0.10, dur: 0.10 });
+    },
+    hit(){ noise({ freq: 700, gain: 0.16, dur: 0.09 });
+           tone({ freq: 210, to: 110, dur: 0.10, type: "square", gain: 0.10 }); },
+    hurt(){ tone({ freq: 220, to: 70, dur: 0.30, type: "sawtooth", gain: 0.17 });
+            noise({ freq: 260, gain: 0.16, dur: 0.16, type: "lowpass" }); },
+    skip(){ tone({ freq: 620, to: 240, dur: 0.20, type: "sine", gain: 0.12 }); },
+    bank(){ tone({ freq: 1046, dur: 0.06, type: "square", gain: 0.13 });
+            tone({ freq: 1568, dur: 0.10, type: "square", gain: 0.12, when: 0.06 }); },
+    potLose(){ [0,1,2,3].forEach(i =>
+            tone({ freq: 520 - i*90, dur: 0.14, type: "triangle", gain: 0.13, when: i*0.075 })); },
+    level(){ [523,659,784,1046].forEach((f,i) =>
+            tone({ freq: f, dur: 0.17, type: "triangle", gain: 0.15, when: i*0.075 })); },
+    relic(){ [1318,1568,2093].forEach((f,i) =>
+            tone({ freq: f, dur: 0.20, type: "sine", gain: 0.12, when: i*0.06 })); },
+    win(){ [523,659,784,1046,1318].forEach((f,i) =>
+            tone({ freq: f, dur: 0.26, type: "triangle", gain: 0.16, when: i*0.11 })); },
+    lose(){ [392,349,294,196].forEach((f,i) =>
+            tone({ freq: f, dur: 0.40, type: "sine", gain: 0.16, when: i*0.19 })); },
+    encounter(kind){
+      if(kind === "boss"){ [98,98,131,98].forEach((f,i) =>
+            tone({ freq: f, dur: 0.26, type: "sawtooth", gain: 0.16, when: i*0.16 })); }
+      else if(kind === "elite"){ tone({ freq: 147, to: 196, dur: 0.34, type: "sawtooth", gain: 0.15 }); }
+      else { tone({ freq: 262, to: 330, dur: 0.20, type: "triangle", gain: 0.12 }); }
+    }
+  };
+
+  /* ---------- 장면별 BGM ----------
+     스케일과 템포만 바꿔 절차적으로 연주한다 (파일 없음) */
+  const SCENES = {
+    title:  { bpm: 76,  root: 130.81, scale:[0,2,3,7,10], gain: 0.13, hat: 0,   swell: true  },
+    map:    { bpm: 88,  root: 146.83, scale:[0,2,3,7,9],  gain: 0.13, hat: 0,   swell: true  },
+    shop:   { bpm: 72,  root: 174.61, scale:[0,2,4,7,9],  gain: 0.12, hat: 0,   swell: true  },
+    battle: { bpm: 108, root: 130.81, scale:[0,3,5,7,10], gain: 0.14, hat: 0.5, swell: false },
+    elite:  { bpm: 122, root: 116.54, scale:[0,3,5,6,10], gain: 0.15, hat: 0.6, swell: false },
+    boss:   { bpm: 134, root: 98.00,  scale:[0,1,5,6,10], gain: 0.16, hat: 0.7, swell: false },
+    danger: { bpm: 146, root: 92.50,  scale:[0,1,4,6,11], gain: 0.16, hat: 0.8, swell: false }
+  };
+
+  function play(name){
+    if(name === scene) return;
+    scene = name;
+    const c = ensure();
+    if(!c) return;
+    stopLoop();
+    if(!bgmOn || !SCENES[name]){ fade(0); return; }
+    const S2 = SCENES[name];
+    step = 0;
+    sceneGain = S2.gain;
+    fade(sceneGain * bgmVol);
+    const stepMs = 60000 / S2.bpm / 2;          // 8분음표
+    timer = setInterval(()=> tick(S2), stepMs);
+    tick(S2);
+  }
+  function tick(S2){
+    const c = ensure(); if(!c || !bgmOn) return;
+    const sc = S2.scale, r = S2.root;
+    const beat = step % 16;
+    // 베이스
+    if(beat % 4 === 0){
+      const deg = (beat === 8) ? sc[2] : sc[0];
+      tone({ freq: r * Math.pow(2, deg/12), dur: 0.34, type: "triangle",
+             gain: 0.22, bus: bgmBus });
+    }
+    // 아르페지오
+    if(beat % 2 === 1 || !S2.swell){
+      const deg = sc[(step * 3 + (step>>2)) % sc.length];
+      const oct = (step % 8 < 4) ? 2 : 3;
+      tone({ freq: r * Math.pow(2, deg/12 + oct), dur: S2.swell ? 0.42 : 0.16,
+             type: S2.swell ? "sine" : "square",
+             gain: S2.swell ? 0.10 : 0.075, bus: bgmBus });
+    }
+    // 하이햇
+    if(S2.hat && beat % 2 === 0){
+      const c2 = ensure();
+      if(c2 && noiseBuf){
+        const t = c2.currentTime;
+        const src = c2.createBufferSource(); src.buffer = noiseBuf;
+        const f = c2.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 6500;
+        const g = c2.createGain();
+        g.gain.setValueAtTime(0.05 * S2.hat, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+        src.connect(f); f.connect(g); g.connect(bgmBus);
+        src.start(t); src.stop(t + 0.1);
+      }
+    }
+    step++;
+  }
+  function fade(to){
+    const c = ensure(); if(!c) return;
+    const t = c.currentTime;
+    bgmBus.gain.cancelScheduledValues(t);
+    bgmBus.gain.setValueAtTime(bgmBus.gain.value, t);
+    bgmBus.gain.linearRampToValueAtTime(to, t + 0.35);
+  }
+  function applySfx(){ const c = ensure(); if(c) sfxBus.gain.value = sfxOn ? sfxVol : 0; }
+  function stopLoop(){ if(timer){ clearInterval(timer); timer = null; } }
+  function stop(){ scene = null; stopLoop(); fade(0); }
+
+  return {
+    resume,
+    sfx(name, arg){ try{ if(SFX[name]) SFX[name](arg); }catch(e){} },
+    scene(name){ try{ play(name); }catch(e){} },
+    stop(){ try{ stop(); }catch(e){} },
+    toggleSfx(){ sfxOn = !sfxOn; applySfx(); return sfxOn; },
+    toggleBgm(){
+      bgmOn = !bgmOn;
+      if(!bgmOn){ stopLoop(); fade(0); }
+      else { const s = scene; scene = null; play(s || "title"); }
+      return bgmOn;
+    },
+    isSfxOn(){ return sfxOn; },
+    isBgmOn(){ return bgmOn; },
+
+    /* ---------- 볼륨 ---------- */
+    setVol(kind, v){
+      v = Math.max(0, Math.min(1, v));
+      if(kind === "master"){ mstVol = v; const c = ensure(); if(c) master.gain.value = v; }
+      else if(kind === "sfx"){ sfxVol = v; applySfx(); }
+      else if(kind === "bgm"){ bgmVol = v; if(bgmOn) fade(sceneGain * bgmVol); }
+      else if(kind === "speech"){ spVol = v; }
+    },
+    getVol(kind){
+      if(kind === "master") return mstVol;
+      if(kind === "sfx")    return sfxVol;
+      if(kind === "speech") return spVol;
+      return bgmVol;
+    }
+  };
+})();
+
+/* 첫 조작에서 오디오를 깨운다 (자동재생 정책) */
+["pointerdown","keydown"].forEach(ev =>
+  document.addEventListener(ev, function once(){ AUDIO.resume(); }, { passive: true }));
+
+/* =====================================================================
+   단어별 숙련도 — 사전지식 없이도 배워가며 플레이할 수 있게 한다.
+     0 소개      : 뜻·철자·발음을 보여주고 그대로 따라 입력 (페널티 없음)
+     1 객관식    : 4지선다로 철자를 고른다
+     2 힌트 타이핑: 앞 두 글자를 보여주고 직접 입력
+     3 완전 회상 : 뜻만 보고 입력 (숙달)
+   판이 끝나도 탭을 닫기 전까지 유지된다. */
+const MASTERY = new Map();
+const MAX_STAGE = 3;
+const STAGE_LABEL = ["① 처음 보는 단어", "② 객관식", "③ 힌트 타이핑", "④ 완전 회상"];
+const STAGE_DMG   = [0.5, 0.7, 0.85, 1.0];   // 도움을 많이 받을수록 데미지가 작다
+
+function mKey(w){ return LANG + ":" + w; }
+function masteryOf(w){ return MASTERY.has(mKey(w)) ? MASTERY.get(mKey(w)) : 0; }
+function setMastery(w, v){ MASTERY.set(mKey(w), Math.max(0, Math.min(MAX_STAGE, v))); }
+
+/* 실제로 출제되는 최저 단계.
+   소개(0)와 객관식(1)은 초보자 모드 전용이고, 일반 모드는 힌트 타이핑(2)부터 시작한다. */
+function minStage(){ return NOVICE ? 0 : 2; }
+
+function stageLabel(s){
+  if(NOVICE) return STAGE_LABEL[s];
+  return s >= MAX_STAGE ? "완전 회상" : "힌트 타이핑";
+}
+function masteryStats(){
+  let learned = 0, mastered = 0;
+  MASTERY.forEach((v, k)=>{ if(k.startsWith(LANG + ":")){ if(v >= 1) learned++; if(v >= MAX_STAGE) mastered++; } });
+  return { learned, mastered };
+}
+
+/* ============ STATE ============ */
+let LANG = "en", DIFFI = "normal", NOVICE = false;
+let S = null, timerId = null, locked = false;
+const $ = id => document.getElementById(id);
+const L = () => LANGS[LANG];
+
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function norm(s){ return s.toLowerCase().trim().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+function same(a,b){ return a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase(); }
+function hasAccent(w){ return norm(w) !== w.toLowerCase(); }
+
+/* ============ TTS ============ */
+let VOICES = [], curVoice = null, voiceSearchDone = false;
+
+function matchLang(v, code){ return new RegExp("^" + code + "(-|_|$)", "i").test(v.lang || ""); }
+function voiceScore(v){
+  const n = (v.name||"").toLowerCase(), l = (v.lang||"").toLowerCase();
+  let s = 0;
+  if(n.includes("google")) s += 40;
+  if(/natural|neural|premium|enhanced/.test(n)) s += 30;
+  if(n.includes("microsoft")) s += 20;
+  if(LANG === "es" && (l.startsWith("es-es")||l.startsWith("es_es"))) s += 10;
+  if(LANG === "es" && (l.startsWith("es-mx")||l.startsWith("es-us"))) s += 6;
+  if(LANG === "en" && (l.startsWith("en-us")||l.startsWith("en_us"))) s += 10;
+  if(LANG === "en" && l.startsWith("en-gb")) s += 6;
+  return s;
+}
+function loadVoices(){
+  if(!window.speechSynthesis) return;
+  const code = L().speechLang;
+  const all = speechSynthesis.getVoices() || [];
+  const found = all.filter(v => matchLang(v, code)).sort((a,b)=> voiceScore(b)-voiceScore(a));
+  const changed = found.length !== VOICES.length ||
+                  found.some((v,i)=> !VOICES[i] || VOICES[i].name !== v.name);
+  if(changed){
+    VOICES = found;
+    if(!curVoice || VOICES.indexOf(curVoice) === -1) curVoice = VOICES[0] || null;
+  }
+  if(VOICES.length > 0) voiceSearchDone = true;
+  renderVoiceUI();
+}
+if(window.speechSynthesis){
+  loadVoices();
+  speechSynthesis.addEventListener("voiceschanged", loadVoices);
+  let tries = 0;
+  const iv = setInterval(()=>{
+    loadVoices();
+    if(VOICES.length > 0 || ++tries > 24){ clearInterval(iv); voiceSearchDone = true; renderVoiceUI(); }
+  }, 250);
+} else { voiceSearchDone = true; }
+
+function speak(word){
+  try{
+    if(!window.speechSynthesis) return;
+    if(!curVoice) loadVoices();
+    if(!curVoice) return;                       // 다른 언어 음성으로 잘못 읽는 것 방지
+    // TTS는 웹오디오 버스를 타지 않으므로 볼륨을 직접 곱해준다
+    const vol = AUDIO.getVol("speech") * AUDIO.getVol("master");
+    if(vol <= 0){ speechSynthesis.cancel(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.voice = curVoice;
+    u.lang  = curVoice.lang || (LANG === "es" ? "es-ES" : "en-US");
+    u.rate  = 0.85;
+    u.volume = Math.max(0, Math.min(1, vol));
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function renderVoiceUI(){
+  const sel = $("voice-select"), warn = $("voice-warn"), box = $("voice-box"), tb = $("voice-test");
+  if(!sel || !warn || !box || !tb) return;
+  const nm = L().label;
+
+  if(VOICES.length === 0 && !voiceSearchDone){
+    box.classList.remove("no-voice");
+    sel.style.display = "none"; tb.style.display = "none";
+    warn.textContent = nm + " 음성을 찾는 중…";
+    return;
+  }
+  if(VOICES.length === 0){
+    box.classList.add("no-voice");
+    sel.style.display = "none"; tb.style.display = "none";
+    warn.innerHTML =
+      '이 브라우저에 <b>' + nm + ' 음성이 설치되어 있지 않습니다.</b> ' +
+      '엉뚱한 언어로 읽는 것을 막기 위해 발음 재생을 꺼두었어요.' +
+      '<span class="fix">Windows: 설정 → 시간 및 언어 → 언어 및 지역 → 언어 추가 → <b>' +
+      (LANG === "es" ? "Español(España)" : "English(United States)") + '</b> → 음성 기능 체크 후 브라우저 재시작<br>' +
+      'Mac: 시스템 설정 → 손쉬운 사용 → 읽어주기 → 시스템 음성 → 사용자화에서 해당 언어 음성 다운로드<br>' +
+      '또는 브라우저를 온라인 상태로 두면 Google 음성이 자동으로 잡히기도 합니다.</span>';
+    return;
+  }
+  box.classList.remove("no-voice");
+  sel.style.display = ""; tb.style.display = "";
+  warn.innerHTML = nm + ' 음성 <b>' + VOICES.length + '개</b> 사용 가능 — 마음에 드는 음성을 고르세요.' +
+    '<span class="fix">이름에 <b>Google</b> / <b>Natural</b> 이 들어간 음성이 가장 자연스럽습니다.</span>';
+  const prev = curVoice ? curVoice.name : "";
+  sel.innerHTML = "";
+  VOICES.forEach((v,i)=>{
+    const o = document.createElement("option");
+    o.value = i; o.textContent = v.name + "  (" + v.lang + ")";
+    if(v.name === prev) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function onVoiceChange(){ curVoice = VOICES[+$("voice-select").value] || VOICES[0] || null; testVoice(); }
+function testVoice(){
+  if(!curVoice) return;
+  speak(LANG === "es" ? "Buenos días. La canción del corazón." : "Good morning. The song of the heart.");
+}
+
+/* ============ START SCREEN ============ */
+function pickLang(code){
+  LANG = code;
+  $("lang-en").classList.toggle("sel", code === "en");
+  $("lang-es").classList.toggle("sel", code === "es");
+  $("howto-es").style.display = (code === "es") ? "" : "none";
+  updateCfgLine();
+  // 언어가 바뀌면 음성 목록을 다시 고른다
+  VOICES = []; curVoice = null; voiceSearchDone = false;
+  loadVoices();
+  if(window.speechSynthesis){
+    let tries = 0;
+    const iv = setInterval(()=>{
+      loadVoices();
+      if(VOICES.length > 0 || ++tries > 8){ clearInterval(iv); voiceSearchDone = true; renderVoiceUI(); }
+    }, 200);
+  }
+}
+function pickDiff(d){
+  DIFFI = d;
+  ["easy","normal","hard"].forEach(k => $("diff-"+k).classList.toggle("sel", k === d));
+  updateCfgLine();
+}
+function pickNovice(v){
+  NOVICE = v;
+  // 도박 설명은 비기너 모드에서 숨기고, 학습 사다리 설명은 모드에 맞춰 바꾼다
+  document.querySelectorAll(".howto-gamble").forEach(el => el.style.display = v ? "none" : "");
+  document.querySelectorAll(".howto-novice").forEach(el => el.style.display = v ? "" : "none");
+  document.querySelectorAll(".howto-normal").forEach(el => el.style.display = v ? "none" : "");
+}
+
+/* ============ 화면 이동 ============ */
+function backToStart(){ showScreen("start"); AUDIO.scene("title"); }
+function showGuide(){    showScreen("guide");    AUDIO.scene("title"); }
+function showSettings(){ showScreen("settings"); AUDIO.scene("title"); }
+
+/* 메인 하단에 현재 설정을 한 줄로 요약해 둔다 — 설정 화면까지 안 들어가도 보이게 */
+function updateCfgLine(){
+  const el = $("cfg-now");
+  if(el) el.textContent = L().label + " · " + diff().label;
+}
+
+/* 모드 버튼 하나로 난이도 성향까지 정하고 바로 시작한다 */
+function startMode(mode){
+  pickNovice(mode === "beginner");
+  startGame();
+}
+
+/* ============ GAME FLOW ============ */
+function startGame(){
+  S = {
+    playerHP: 100, playerMax: 100,
+    combo: 0, maxCombo: 0,
+    submits: 0, corrects: 0, crits: 0, tildePerfect: 0,
+    level: 1, exp: 0,
+    bonusAtk: 0, bonusTime: 0,
+    charges: { hint:2, time:2, heal:1, power:1 },
+    powerUp: false, extraHint: 0,
+    hasteStacks: 0,
+    skips: 0, skipsMax: 0, skipped: 0,
+    gold: 0, relics: [], floors: null, floorIdx: 0, cleared: [],
+    enc: null, phoenixUsed: false, relicMeta: {},
+    missed: new Map(),
+    queue: [], word: null,
+    wstage: MAX_STAGE, choices: [], choiceLocked: false, newlyLearned: 0,
+    speedSum: 0, speedN: 0, speedBest: 0, timerBase: 0,
+    pot: 0, potStreak: 0, potPeak: 0, potBanked: 0, potLost: 0,
+    pendingGold: 0, gambleMul: 1, gambleRound: 0, gambleWins: 0, gambleLosses: 0, gambleWord: null,
+    wordStart: 0, backspaced: false, wrongTried: false
+  };
+  $("player-emoji").innerHTML = icon(L().hero);
+  $("q-label").textContent = L().qLabel;
+  buildAccentRow();
+  buildSkillRow();
+  startRun();
+}
+
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+}
+
+/* 현재 상대 — 맵 노드에서 만들어진 S.enc */
+function foe(){ return (S && S.enc) ? S.enc : {}; }
+function diff(){ return DIFF[DIFFI]; }
+function bossTime(){
+  let base = (foe().time || 13000) * diff().timeMul + S.bonusTime;
+  if(NOVICE) base *= 1.35;                                 // 초보자 모드는 여유 있게
+  if(hasRelic("hour")) base += 3000;                       // 유물: 모래시계
+  const haste = hasGimmick("haste") ? Math.max(0.55, 1 - S.hasteStacks * 0.05) : 1;
+  return Math.max(3500, base * haste);
+}
+function hasGimmick(k){
+  const b = foe();
+  return !!(b.gims && b.gims.includes(k));
+}
+
+function makeQueue(tier){
+  return shuffle(L().bank[tier]).map(w=>({ w:w[0], ko:w[1], tag:w[2] }));
+}
+
+function nextWord(){
+  if(S.queue.length === 0) S.queue = makeQueue(foe().tier);
+  S.word = S.queue.shift();
+  S.wordStart = performance.now();
+  S.backspaced = false;
+  S.wrongTried = false;
+  S.extraHint = 0;
+  S.wstageRaw = masteryOf(S.word.w);                    // 저장된 숙련도
+  S.wstage    = Math.max(minStage(), S.wstageRaw);      // 실제 출제 단계 (모드별 하한 적용)
+
+  $("q-meaning").textContent = S.word.ko;
+  $("q-tag").textContent = S.word.tag;
+  const badge = $("stage-badge");
+  badge.textContent = stageLabel(S.wstage);
+  badge.className = "stage-badge s" + S.wstage;
+
+  const inp = $("word-input"), intro = $("intro-box"), crow = $("choice-row"), arow = $("accent-row");
+  inp.value = ""; inp.className = S.powerUp ? "buffed" : "";
+  crow.innerHTML = "";
+  // 객관식은 타이핑이 아니므로 속도 보너스를 적용하지 않는다
+  document.querySelector(".speed-row").style.display = (S.wstage === 1) ? "none" : "";
+
+  if(S.wstage === 0){
+    /* 소개 — 철자를 보여주고 따라 치게 한다 */
+    intro.style.display = "";
+    $("intro-word").textContent = S.word.w;
+    crow.style.display = "none";
+    arow.style.display = L().accents.length ? "" : "none";
+    $("q-hint").innerHTML = "";
+    inp.style.display = ""; inp.disabled = false;
+    inp.placeholder = "위 단어를 그대로 입력";
+    speak(S.word.w);
+    inp.focus();
+    startTimer(bossTime() * 2);
+  } else if(S.wstage === 1){
+    /* 객관식 */
+    intro.style.display = "none";
+    arow.style.display = "none";
+    inp.style.display = "none"; inp.disabled = true;
+    $("q-hint").innerHTML = '<span style="font-size:13px;color:var(--dim);letter-spacing:0">알맞은 철자를 고르세요 · 숫자키 1~4</span>';
+    buildChoices();
+    crow.style.display = "";
+    startTimer(bossTime() * 1.3);
+  } else {
+    /* 타이핑 (2단계는 힌트가 한 글자 더) */
+    intro.style.display = "none";
+    crow.style.display = "none";
+    arow.style.display = L().accents.length ? "" : "none";
+    inp.style.display = ""; inp.disabled = false;
+    inp.placeholder = "철자를 입력하고 Enter";
+    renderHint();
+    inp.focus();
+    startTimer(bossTime());
+  }
+  buildSkillRow();
+  updateSkipUI();
+  updatePotUI();
+}
+
+/* 오답 선택지는 같은 티어에서 길이가 비슷한 단어로 고른다 */
+function buildChoices(){
+  const bank = L().bank[foe().tier] || L().bank[1];
+  const answer = S.word.w;
+  const len = norm(answer).length;
+  const pool = bank.map(x => x[0]).filter(w => w !== answer);
+  const near = shuffle(pool.filter(w => Math.abs(norm(w).length - len) <= 2));
+  const rest = shuffle(pool.filter(w => near.indexOf(w) === -1));
+  const distract = near.concat(rest).slice(0, 3);
+  S.choices = shuffle([answer].concat(distract));
+
+  const row = $("choice-row");
+  row.innerHTML = "";
+  S.choices.forEach((w, i)=>{
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "choice";
+    b.innerHTML = '<span class="k">' + (i+1) + '</span>' + w;
+    b.onclick = ()=> answerChoice(i);
+    row.appendChild(b);
+  });
+}
+
+function answerChoice(i){
+  if(locked || !S.word || S.wstage !== 1 || S.choiceLocked) return;
+  const picked = S.choices[i];
+  if(picked === undefined) return;
+  S.choiceLocked = true;
+  clearInterval(timerId);
+  S.submits++;
+
+  const btns = $("choice-row").querySelectorAll(".choice");
+  btns.forEach(b => b.classList.add("locked"));
+  const correctIdx = S.choices.indexOf(S.word.w);
+
+  if(picked === S.word.w){
+    btns[i].classList.add("right");
+    S.corrects++; S.combo++;
+    S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.hasteStacks++;
+    setMastery(S.word.w, 2);
+    speak(S.word.w);
+    let dmg = Math.max(1, Math.round((14 + S.bonusAtk + Math.min(S.combo,12)*2) * STAGE_DMG[1]));
+    if(S.powerUp){ dmg *= 3; S.powerUp = false; }
+    if(hasRelic("quill")) S.gold += 3;
+    if(hasRelic("ring")){ S.playerHP = Math.min(S.playerMax, S.playerHP + 3); updateBars(); }
+    addPot();
+    gainExp(10);
+    updateHUD();
+    setTimeout(()=>{ S.choiceLocked = false; hitBoss(dmg, "-" + dmg); }, 450);
+  } else {
+    btns[i].classList.add("wrong");
+    if(correctIdx >= 0) btns[correctIdx].classList.add("right");
+    S.combo = 0;
+    S.missed.set(S.word.w, Object.assign({}, S.word, { why: "wrong" }));
+    speak(S.word.w);
+    losePot("wrong");
+    updateHUD();
+    hurtPlayer(Math.round(4 * diff().dmgMul * (NOVICE ? 0.5 : 1)), false);
+    requeue(S.word, 3);
+    if(S.playerHP > 0) setTimeout(()=>{ S.choiceLocked = false; nextWord(); }, 1500);
+  }
+}
+
+/* 앞에서 몇 글자를 공개할지 — 저주 기믹은 0, 돋보기 유물은 +1 */
+function hintReveal(){
+  let n = hasGimmick("curse") ? 0 : 1;
+  if(S.wstage === 2) n += 1;          // 힌트 타이핑 단계는 한 글자 더
+  if(NOVICE) n += 1;                  // 초보자 모드
+  if(hasRelic("glass")) n += 1;
+  return n + S.extraHint;
+}
+
+/* 힌트 표시. 사전 편찬자 유물이 있으면 마지막 글자도 보여준다 */
+function renderHint(){
+  const plain = norm(S.word.w);
+  const reveal = Math.min(hintReveal(), plain.length);
+  const lastToo = hasRelic("lexicon");
+  const chars = plain.split("").map((ch,i)=>{
+    if(i < reveal) return ch;
+    if(lastToo && i === plain.length-1) return ch;
+    return "_";
+  });
+  $("q-hint").innerHTML = chars.join(" ") +
+    '<span style="font-size:12px;color:var(--dim);letter-spacing:0"> (' + plain.length + '글자)</span>';
+}
+
+/* =====================================================================
+   속도 보상 — 남은 시간에 비례해 연속적으로 데미지가 오른다.
+   문턱을 넘기면 끝이던 예전 방식과 달리, 빠를수록 계속 이득이 된다.
+   ===================================================================== */
+function speedRemain(){
+  if(!S || !S.timerBase) return 0;
+  const elapsed = performance.now() - S.wordStart;
+  return Math.max(0, Math.min(1, 1 - elapsed / S.timerBase));
+}
+
+/* 실제 데미지에 곱해질 보너스 (0 = 없음, 1 = 두 배) */
+function speedBonus(remain, clean){
+  let b = remain;
+  if(!clean) b *= 0.5;                 // 고쳐 치거나 힌트를 쓰면 절반만
+  if(hasRelic("glass")) b = 0;         // 돋보기: 속도 보너스를 포기한다
+  if(hasRelic("bolt"))  b *= 1.25;     // 이중 타격: 속도 보너스 강화
+  return b;
+}
+
+const SPEED_TIERS = [
+  { min: 0.70, label: "PERFECT", color: "#8fdcff" },
+  { min: 0.45, label: "GREAT",   color: "#3fb8f0" },
+  { min: 0.20, label: "GOOD",    color: "#6f8ca0" }
+];
+function speedTier(b){ return SPEED_TIERS.find(t => b >= t.min) || null; }
+
+function startTimer(ms){
+  clearInterval(timerId);
+  const fill = $("timer-fill");
+  const t0 = performance.now();
+  S.timerTotal = ms;
+  S.timerBase  = ms;      // 속도 계산 기준 (시간 연장 스킬로도 바뀌지 않는다)
+  S.timerStart = t0;
+  fill.style.width = "100%";
+  updateSpeedTag();
+  timerId = setInterval(()=>{
+    const left = 1 - (performance.now()-S.timerStart)/S.timerTotal;
+    if(left <= 0){ clearInterval(timerId); onTimeout(); }
+    else {
+      fill.style.width = (left*100) + "%";
+      fill.style.background = left < 0.3 ? "#e8663f" : "#1d6f96";
+      updateSpeedTag();
+    }
+  }, 50);
+}
+
+/* 지금 입력하면 얼마를 더 받는지 실시간으로 보여준다 */
+function updateSpeedTag(){
+  const tag = $("speed-tag");
+  if(!tag || !S || !S.word) return;
+  const clean = !S.backspaced && !S.wrongTried && S.extraHint === 0;
+  const b = speedBonus(speedRemain(), clean);
+  const pct = Math.round(b * 100);
+  tag.textContent = "+" + pct + "%";
+  tag.className = pct >= 70 ? "max" : (pct >= 30 ? "hi" : "");
+}
+
+/* ============ COMBAT ============ */
+function submit(){
+  if(locked || !S.word) return;
+  const inp = $("word-input");
+  const raw = inp.value.trim();
+  if(!raw) return;
+  S.submits++;
+
+  const target = S.word.w;
+  const exact = same(raw, target);
+  const loose = L().hasAccentRule && norm(raw) === norm(target);
+
+  if(exact || loose){
+    clearInterval(timerId);
+    S.corrects++; S.combo++;
+    S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.hasteStacks++;
+
+    if(S.wstageRaw === 0) S.newlyLearned++;  // 처음 맞힌 단어
+    setMastery(target, S.wstage + 1);        // 한 단계 승급
+
+    const clean = !S.backspaced && !S.wrongTried && S.extraHint === 0;
+    const remain = speedRemain();
+    const sBonus = speedBonus(remain, clean);            // 0 ~ 1.25
+    const tier   = speedTier(sBonus);
+    S.speedSum += sBonus; S.speedN++;
+    S.speedBest = Math.max(S.speedBest, sBonus);
+    const crit = !!tier && tier.label === "PERFECT";     // 최상위 판정
+    if(crit) S.crits++;
+
+    const tildeBonus = L().hasAccentRule && exact && hasAccent(target);
+    if(tildeBonus) S.tildePerfect++;
+
+    let dmg = 14 + S.bonusAtk + Math.min(S.combo,12)*2;
+    dmg *= (1 + sBonus);                                 // 빠를수록 연속적으로 증가
+    if(tildeBonus) dmg *= 1.5;
+    if(S.powerUp) { dmg *= 3; S.powerUp = false; }
+    if(hasRelic("pen")   && norm(target).length >= 8) dmg *= 1.4;   // 속기사의 펜
+    if(hasRelic("sword") && S.combo >= 5)             dmg *= 1.5;   // 콤보의 검
+    if(hasRelic("hour"))                              dmg *= 0.9;   // 모래시계
+    if(hasRelic("seal"))                              dmg *= (S.backspaced ? 0.8 : 1.3); // 정확의 인장
+    if(hasGimmick("shield") && S.combo < 3)           dmg *= 0.5;   // 방패 기믹
+    dmg *= STAGE_DMG[S.wstage];                                     // 학습 단계 배율
+    dmg *= (1 + riskBonus());                                       // 전리품을 들고 있을수록 강해진다
+    dmg = Math.max(1, Math.round(dmg));
+
+    inp.className = "right"; inp.disabled = true;
+    $("q-hint").innerHTML = '<span id="answer-reveal">' + target + '</span>';
+    speak(target);
+
+    let label = "-" + dmg;
+    if(tier) label = tier.label + " " + label;
+    if(tildeBonus) label = "TILDE " + label;
+    if(hasGimmick("shield") && S.combo < 3) label += " (SHIELD)";
+    if(tier) floatText(tier.label + "  +" + Math.round(sBonus*100) + "%",
+                       tier.color, ".question-card");
+
+    if(hasRelic("ring")){                                // 흡혈 반지
+      S.playerHP = Math.min(S.playerMax, S.playerHP + 3);
+      updateBars();
+    }
+    if(hasRelic("quill")) S.gold += 3;                   // 황금 깃펜
+
+    AUDIO.sfx("wordDone", sBonus);
+    addPot();
+    gainExp(S.wstage === 0 ? 6 : Math.round(12 + sBonus * 8));   // 빠를수록 EXP도 더
+    hitBoss(dmg, label);
+  } else {
+    S.combo = 0;
+    S.wrongTried = true;
+    inp.className = "wrong"; inp.value = "";
+    setTimeout(()=>{ if(inp.className === "wrong") inp.className = S.powerUp ? "buffed" : ""; }, 350);
+
+    AUDIO.sfx("wrong");
+    if(S.wstage === 0){
+      // 소개 단계는 보고 따라 치는 것이므로 오타에 벌을 주지 않는다 (전리품도 그대로)
+      floatText("RETRY", "#5f7183", ".question-card");
+    } else {
+      losePot("wrong");
+      S.missed.set(target, Object.assign({}, S.word, { why: "wrong" }));
+      let wrongDmg = 4 * diff().dmgMul;
+      if(hasRelic("curseD")) wrongDmg *= 2;              // 저주받은 사전
+      if(NOVICE) wrongDmg *= 0.5;
+      hurtPlayer(Math.round(wrongDmg), false);
+      if(hasGimmick("drain")) drainHeal(8);
+    }
+    inp.focus();
+  }
+  updateHUD();
+}
+
+function hitBoss(dmg, label){
+  AUDIO.sfx("hit");
+  S.bossHP = Math.max(0, S.bossHP - dmg);
+  const be = $("boss-emoji");
+  be.classList.remove("hit"); void be.offsetWidth; be.classList.add("hit");
+  floatText(label, "#8fdcff", ".boss-area");
+  updateBars();
+  if(S.bossHP <= 0) setTimeout(bossDefeated, 620);
+  else setTimeout(nextWord, 780);
+}
+
+function onTimeout(){
+  if(locked || !S.word) return;
+  S.combo = 0;
+  S.choiceLocked = false;
+  updateHUD();
+  $("choice-row").style.display = "none";
+  $("intro-box").style.display = "none";
+  $("q-hint").innerHTML = '정답: <span id="answer-reveal">' + S.word.w + "</span>";
+  speak(S.word.w);
+  $("word-input").disabled = true;
+
+  if(S.wstage === 0){
+    // 소개 단계에서 시간이 다 되면 반격 없이 넘어간다
+    requeue(S.word, 2);
+    setTimeout(nextWord, 1800);
+    return;
+  }
+
+  setMastery(S.word.w, S.wstage - 1);     // 한 단계 내려가서 다시 배운다
+  S.missed.set(S.word.w, Object.assign({}, S.word, { why: "wrong" }));
+  losePot("timeout");
+
+  const be = $("boss-emoji");
+  be.classList.remove("attack"); void be.offsetWidth; be.classList.add("attack");
+  let toDmg = foe().dmg * diff().dmgMul;
+  if(hasRelic("amulet")) toDmg *= 0.5;                  // 수호 부적
+  if(NOVICE) toDmg *= 0.6;
+  hurtPlayer(Math.round(toDmg), true);
+  if(hasGimmick("drain")) drainHeal(15);
+
+  requeue(S.word, 3);   // 조금 뒤에 재출제
+  if(S.playerHP > 0) setTimeout(nextWord, 2000);
+}
+
+/* ============ 건너뛰기 ============
+   모르는 단어에서 막히지 않도록 넘어간다.
+   체력 손실은 없지만 콤보가 끊기고 EXP도 없으며, 그 단어는 뒤에서 다시 나온다. */
+function skipWord(){
+  if(!S || locked || !S.word) return;
+  const inp = $("word-input");
+  if(inp.disabled && S.wstage !== 1) return;      // 객관식일 때는 입력창이 숨겨져 있다
+  if(S.choiceLocked) return;
+  if(S.skips <= 0){
+    floatText("NO SKIP LEFT", "#e8663f", ".question-card");
+    return;
+  }
+
+  clearInterval(timerId);
+  S.skips--;
+  S.skipped++;
+  S.combo = 0;
+  const w = S.word;
+  S.missed.set(w.w, Object.assign({}, w, { why: "skip" }));
+  setMastery(w.w, 0);          // 모르는 단어이므로 다음엔 철자를 보여주며 다시 소개한다
+  losePotHalf();               // 건너뛰기는 전리품 절반만 흘린다
+  AUDIO.sfx("skip");
+
+  inp.disabled = true;
+  inp.className = "";
+  $("choice-row").style.display = "none";
+  $("intro-box").style.display = "none";
+  $("q-hint").innerHTML = '정답: <span id="answer-reveal">' + w.w + '</span>';
+  speak(w.w);
+  floatText("SKIP", "#5f7183", ".question-card");
+
+  requeue(w, 4);   // 나중에 다시 출제
+  updateSkipUI();
+  updateHUD();
+  setTimeout(nextWord, 1700);
+}
+
+/* =====================================================================
+   전리품 뱅킹 — 손실 회피를 자극하는 장치.
+   맞힐수록 미확정 전리품이 가속해서 불어나고, 들고 있는 동안 공격력도 오른다.
+   하지만 한 번이라도 틀리면 전부 사라진다. 회수하면 안전하지만 연속이 끊긴다.
+   ===================================================================== */
+const POT_MAX_RISK_BONUS = 0.30;    // 위험 보너스 상한 (+30%)
+
+function potGain(){
+  const base = 6 + S.potStreak * 3;                 // 6, 9, 12, 15 …
+  return Math.max(1, Math.round(base * STAGE_DMG[S.wstage]));
+}
+function riskBonus(){
+  if(NOVICE) return 0;                                  // 초보자 모드엔 위험도 보상도 없다
+  return Math.min(POT_MAX_RISK_BONUS, S.pot * 0.004);   // 전리품 75 → +30%
+}
+
+function addPot(){
+  const g = potGain();
+  if(NOVICE){
+    // 초보자 모드: 잃을 걱정 없이 그 자리에서 확정 적립
+    S.gold += g; S.potBanked += g;
+    S.pot += g; S.potStreak++;
+    S.potPeak = Math.max(S.potPeak, S.pot);
+    updatePotUI(true);
+    floatText("+" + g + " G", "#5fbf8e", ".pot-bar");
+    return;
+  }
+  S.pot += g;
+  S.potStreak++;
+  S.potPeak = Math.max(S.potPeak, S.pot);
+  updatePotUI(true);
+  floatText("+" + g, "#cfa04a", ".pot-bar");
+}
+
+function losePot(reason){
+  if(NOVICE) return;                       // 초보자 모드에서는 잃지 않는다
+  if(S.pot <= 0){ S.potStreak = 0; updatePotUI(); return; }
+  const lost = S.pot;
+  S.pot = 0; S.potStreak = 0;
+  S.potLost += lost;
+  updatePotUI();
+  AUDIO.sfx("potLose");
+  floatText("LOST -" + lost, "#e8663f", ".pot-bar");
+  $("pot-line").className = "pot-line tense";
+  $("pot-line").textContent = "전리품 " + lost + "을(를) 잃었습니다. " + pick2(ENCOURAGE_LOSS);
+}
+
+/* half=true 면 절반만 잃는다 (건너뛰기) */
+function losePotHalf(){
+  if(NOVICE) return;                       // 초보자 모드에서는 잃지 않는다
+  if(S.pot <= 0) return;
+  const lost = Math.ceil(S.pot / 2);
+  S.pot -= lost; S.potLost += lost; S.potStreak = 0;
+  updatePotUI();
+  floatText("LOST -" + lost, "#e8663f", ".pot-bar");
+  $("pot-line").className = "pot-line tense";
+  $("pot-line").textContent = "건너뛰면서 전리품 절반(" + lost + ")을 흘렸습니다.";
+}
+
+function bankPot(auto){
+  if(NOVICE) return;                       // 이미 즉시 확정되었으므로 회수할 것이 없다
+  if(!S || S.pot <= 0) return;
+  const amt = S.pot;
+  S.gold += amt;
+  S.potBanked += amt;
+  S.pot = 0; S.potStreak = 0;
+  updatePotUI();
+  AUDIO.sfx("bank");
+  floatText("BANKED +" + amt, "#5fbf8e", ".pot-bar");
+  $("pot-line").className = "pot-line calm";
+  $("pot-line").textContent = auto
+    ? "전투를 끝내고 전리품 " + amt + "을(를) 챙겼습니다."
+    : amt + " 골드를 안전하게 확정했습니다. 연속은 처음부터 다시.";
+}
+
+function updatePotUI(bump){
+  const bar = $("pot-bar"), amt = $("pot-amt");
+  if(!bar || !amt || !S) return;
+  amt.textContent = S.pot;
+  if(bump){ amt.classList.remove("up"); void amt.offsetWidth; amt.classList.add("up"); }
+  $("pot-streak").textContent = S.potStreak > 0 ? S.potStreak + "연속" : "";
+
+  if(NOVICE){
+    // 초보자 모드: 위험 없는 누적 표시
+    $("pot-label").textContent = "이번 전투 획득 골드";
+    $("pot-risk").textContent = "";
+    $("bank-btn").style.display = "none";
+    bar.classList.remove("hot", "blaze");
+    const line = $("pot-line");
+    line.className = "pot-line calm";
+    line.textContent = "맞힐 때마다 바로 확정됩니다. 틀려도 잃지 않아요.";
+    return;
+  }
+  $("pot-label").textContent = "미확정 전리품";
+  $("bank-btn").style.display = "";
+
+  const rb = Math.round(riskBonus() * 100);
+  $("pot-risk").textContent = rb > 0 ? "위험 보너스 +" + rb + "%" : "";
+
+  bar.classList.toggle("hot",   S.pot >= 30 && S.pot < 70);
+  bar.classList.toggle("blaze", S.pot >= 70);
+  $("bank-btn").disabled = S.pot <= 0;
+
+  if(S.pot > 0){
+    const line = $("pot-line");
+    line.className = "pot-line " + (S.pot >= 70 ? "tense" : "calm");
+    if(S.pot >= 70)      line.textContent = "지금 잃으면 정말 뼈아픕니다. 회수할까요?";
+    else if(S.pot >= 30) line.textContent = "슬슬 아까워지는 액수입니다.";
+    else                 line.textContent = "맞힐수록 불어나지만, 한 번 틀리면 전부 사라집니다.";
+  }
+}
+
+const ENCOURAGE_LOSS = [
+  "괜찮습니다, 다시 쌓으면 됩니다.",
+  "여기서 배운 단어는 남습니다.",
+  "다음엔 회수 타이밍을 노려보세요.",
+  "크게 걸었으니 크게 아픈 겁니다. 나쁘지 않아요."
+];
+function pick2(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* 틀리거나 건너뛴 단어를 다시 큐에 넣는다.
+   메아리의 종 유물이 있으면 더 앞쪽에 + 한 번 더 넣어 복습이 강해진다. */
+function requeue(w, pos){
+  if(hasRelic("bell")){
+    S.queue.splice(Math.min(1, S.queue.length), 0, w);
+    S.queue.splice(Math.min(pos + 2, S.queue.length), 0, w);
+  } else {
+    S.queue.splice(Math.min(pos, S.queue.length), 0, w);
+  }
+}
+
+function updateSkipUI(){
+  const btn = $("skip-btn"), n = $("skip-n");
+  if(!btn || !n || !S) return;
+  n.textContent = S.skips;
+  btn.disabled = S.skips <= 0;
+}
+
+function drainHeal(amt){
+  S.bossHP = Math.min(S.bossMax, S.bossHP + amt);
+  floatText("DRAIN +" + amt, "#e8663f", ".boss-area");
+  updateBars();
+}
+
+function hurtPlayer(dmg, big){
+  AUDIO.sfx("hurt");
+  S.playerHP = Math.max(0, S.playerHP - dmg);
+  const pe = $("player-emoji");
+  pe.classList.remove("hurt"); void pe.offsetWidth; pe.classList.add("hurt");
+  if(big){
+    const b = $("battle");
+    b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake");
+  }
+  floatText("-" + dmg, "#e8663f", ".player-row");
+  updateBars();
+  if(S.playerHP <= 0){
+    clearInterval(timerId);
+    // 불사조 깃털: 1회 부활
+    if(hasRelic("phoenix") && !S.phoenixUsed){
+      S.phoenixUsed = true;
+      S.relics = S.relics.filter(r => r !== "phoenix");
+      S.playerHP = Math.round(S.playerMax * 0.5);
+      updateBars(); updateRelicBar();
+      floatText("REVIVE", "#cfa04a", ".player-row");
+      setTimeout(nextWord, 1200);
+      return;
+    }
+    setTimeout(()=> endGame(false), 700);
+  }
+}
+
+function bossDefeated(){
+  clearInterval(timerId);
+  gainExp(40);
+  encounterCleared();
+}
+
+/* ============ LEVEL / SKILL ============ */
+function expNeeded(){
+  return Math.round(EXP_PER_LEVEL * (hasRelic("crown") ? 0.8 : 1));   // 학자의 왕관
+}
+function gainExp(n){
+  if(hasRelic("specs"))  n = Math.round(n * 1.5);   // 학자의 안경
+  if(hasRelic("curseD")) n = n * 2;                 // 저주받은 사전
+  S.exp += n;
+  while(S.exp >= expNeeded()){
+    S.exp -= expNeeded();
+    S.level++;
+    queueLevelUp();
+  }
+  updateHUD();
+}
+
+let pendingLevelUps = 0;
+function queueLevelUp(){
+  pendingLevelUps++;
+  if(pendingLevelUps === 1) setTimeout(showLevelUp, 700);
+}
+
+function showLevelUp(){
+  if(pendingLevelUps <= 0) return;
+  locked = true;
+  clearInterval(timerId);
+  const opts = shuffle(LEVEL_OPTIONS).slice(0,3);
+  $("lu-title").textContent = "LEVEL " + S.level;
+  $("lu-sub").textContent = "강화를 하나 선택하세요" + (pendingLevelUps > 1 ? "  (남은 선택 " + pendingLevelUps + "회)" : "");
+  const box = $("lu-opts");
+  box.innerHTML = "";
+  opts.forEach(o=>{
+    const d = document.createElement("div");
+    d.className = "lu-opt";
+    d.innerHTML = '<span class="ic">'+icon(o.ic)+'</span><span class="tx"><b>'+o.t+'</b><span>'+o.d+'</span></span>';
+    d.onclick = ()=> chooseLevelUp(o.id);
+    box.appendChild(d);
+  });
+  AUDIO.sfx("level");
+  $("levelup").classList.add("show");
+}
+
+function chooseLevelUp(id){
+  if(id === "maxhp"){ S.playerMax += 20; S.playerHP += 20; }
+  else if(id === "attack"){ S.bonusAtk += 4; }
+  else if(id === "clock"){ S.bonusTime += 1500; }
+  else { S.charges[id] = Math.min(SKILLS[id].max, S.charges[id] + 2); }
+
+  pendingLevelUps--;
+  $("levelup").classList.remove("show");
+  updateBars(); updateHUD(); buildSkillRow();
+
+  if(pendingLevelUps > 0){ setTimeout(showLevelUp, 250); return; }
+  locked = false;
+  // 레벨업 창을 닫으면 남은 시간으로 타이머 재개
+  const inp = $("word-input");
+  if(!inp.disabled && S.word){
+    startTimer(bossTime());
+    inp.focus();
+  }
+}
+
+function buildSkillRow(){
+  const row = $("skill-row");
+  if(!row) return;
+  row.innerHTML = "";
+  Object.keys(SKILLS).forEach(k=>{
+    const sk = SKILLS[k];
+    const n = S ? S.charges[k] : 0;
+    const d = document.createElement("div");
+    d.className = "skill" + (n > 0 ? "" : " off");
+    d.innerHTML = '<span class="key">'+sk.key+'</span><span class="ic">'+icon(sk.ic)+'</span>' +
+                  '<span class="nm">'+sk.nm+'</span><span class="ch">x'+n+'</span>';
+    d.title = sk.desc;
+    if(n > 0) d.onclick = ()=> useSkill(k);
+    row.appendChild(d);
+  });
+}
+
+function useSkill(k){
+  if(!S || locked || S.charges[k] <= 0) return;
+  const inp = $("word-input");
+  if(inp.disabled) return;
+
+  if(k === "hint"){
+    const plain = norm(S.word.w);
+    const shown = (hasGimmick("curse") ? 0 : 1) + S.extraHint;
+    if(shown >= plain.length) return;
+    S.extraHint++;
+    renderHint();
+    floatText("HINT", "#3fb8f0", ".question-card");
+  } else if(k === "time"){
+    S.timerTotal += 5000;
+    floatText("+5s", "#3fb8f0", ".question-card");
+  } else if(k === "heal"){
+    const before = S.playerHP;
+    S.playerHP = Math.min(S.playerMax, S.playerHP + 30);
+    updateBars();
+    floatText("+" + (S.playerHP - before), "#5fbf8e", ".player-row");
+  } else if(k === "power"){
+    S.powerUp = true;
+    inp.className = "buffed";
+    floatText("POWER", "#cfa04a", ".question-card");
+  }
+  S.charges[k]--;
+  buildSkillRow();
+  inp.focus();
+}
+
+/* ============ UI ============ */
+function updateBars(){
+  $("boss-hp-fill").style.width = (S.bossHP / S.bossMax * 100) + "%";
+  $("boss-hp-num").textContent = S.bossHP + " / " + S.bossMax;
+  $("player-hp-fill").style.width = (S.playerHP / S.playerMax * 100) + "%";
+  $("player-hp-num").textContent = "HP  " + S.playerHP + " / " + S.playerMax;
+  updateDangerMusic();
+}
+
+/* 체력이 바닥나면 음악이 급해진다 (여유를 두어 자주 바뀌지 않게 한다) */
+function updateDangerMusic(){
+  if(!S || !S.enc || !$("battle").classList.contains("active")) return;
+  const ratio = S.playerHP / S.playerMax;
+  const base = S.enc.kind === "boss" ? "boss" : (S.enc.kind === "elite" ? "elite" : "battle");
+  if(ratio <= 0.28)      AUDIO.scene("danger");
+  else if(ratio >= 0.38) AUDIO.scene(base);
+}
+function updateHUD(){
+  $("lv-chip").textContent = "Lv." + S.level;
+  $("exp-fill").style.width = (S.exp / expNeeded() * 100) + "%";
+  const n = $("combo-num");
+  n.textContent = S.combo;
+  n.classList.remove("combo-pop"); void n.offsetWidth; n.classList.add("combo-pop");
+}
+function floatText(text, color, anchorSel){
+  const anchor = document.querySelector(anchorSel);
+  if(!anchor) return;
+  const el = document.createElement("div");
+  el.className = "float-dmg";
+  el.style.color = color; el.textContent = text;
+  el.style.left = (28 + Math.random()*28) + "%";
+  el.style.top = "18%";
+  anchor.style.position = "relative";
+  anchor.appendChild(el);
+  setTimeout(()=> el.remove(), 1050);
+}
+function buildAccentRow(){
+  const row = $("accent-row");
+  row.innerHTML = "";
+  const chars = L().accents;
+  row.style.display = chars.length ? "" : "none";
+  chars.forEach(ch=>{
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = ch;
+    b.onclick = ()=> insertChar(ch);
+    row.appendChild(b);
+  });
+}
+function insertChar(ch){
+  const inp = $("word-input");
+  if(inp.disabled) return;
+  const s = inp.selectionStart ?? inp.value.length;
+  const e = inp.selectionEnd ?? inp.value.length;
+  inp.value = inp.value.slice(0,s) + ch + inp.value.slice(e);
+  inp.focus(); inp.setSelectionRange(s+1, s+1);
+}
+
+/* ============ END ============ */
+function endGame(victory){
+  clearInterval(timerId);
+  pendingLevelUps = 0;
+  $("levelup").classList.remove("show");
+  $("panel").classList.remove("show");
+  showScreen("result");
+  AUDIO.stop();
+  AUDIO.sfx(victory ? "win" : "lose");
+  $("result-emoji").innerHTML = victory ? icon("flag") : icon("skull");
+  $("result-title").textContent = victory ? "CLEAR" : "DEFEAT";
+
+  const relicList = S.relics.map(id=>{ const r = relicById(id); return r ? r.nm : ""; })
+                            .filter(Boolean).join(", ");
+  $("result-sub").innerHTML = (victory
+      ? "드래곤 로드를 쓰러뜨리고 던전을 정복했습니다!"
+      : ((foe().ko || "적") + "에게 " + (S.floorIdx+1) + "층에서 쓰러졌습니다."))
+    + "<br>(" + L().label + " · " + diff().label + " · " + S.gold + "G)"
+    + (relicList ? "<br><span style='font-size:12px'>유물: " + relicList + "</span>" : "")
+    + "<br><span style='font-size:12px;color:var(--sky)'>지금까지 " + L().label + " 단어 "
+    + masteryStats().learned + "개를 익혔고 그중 " + masteryStats().mastered
+    + "개는 완전히 숙달했습니다. 숙련도는 다음 판에도 이어집니다.</span>";
+  $("st-boss").textContent = (victory ? RUN_FLOORS : S.floorIdx + 1) + "층";
+  $("st-lv").textContent = S.level;
+  $("st-combo").textContent = S.maxCombo;
+  $("st-acc").textContent = S.submits ? Math.round(S.corrects / S.submits * 100) + "%" : "0%";
+  $("st-crit").textContent = S.crits;
+  $("st-speed").textContent = S.speedN
+    ? "+" + Math.round(S.speedSum / S.speedN * 100) + "%" : "0%";
+  $("st-words").textContent = S.corrects;
+  $("st-skip").textContent = S.skipped;
+  const ms = masteryStats();
+  $("st-new").textContent = S.newlyLearned;
+  $("st-master").textContent = ms.mastered;
+  $("st-peak").textContent = S.potPeak;
+  $("st-lost").textContent = S.potLost;
+  $("st-gamble").textContent = S.gambleWins + "승 " + S.gambleLosses + "패";
+
+  const list = $("review-list");
+  list.innerHTML = "";
+  if(S.missed.size === 0){
+    list.innerHTML = '<div class="empty">틀린 단어가 없어요. 완벽합니다.</div>';
+  } else {
+    for(const [w, o] of S.missed){
+      const d = document.createElement("div");
+      d.className = "item";
+      const mark = o.why === "skip"
+        ? '<span class="why skip">건너뜀</span>'
+        : '<span class="why wrong">틀림</span>';
+      d.innerHTML = '<span class="w">' + w + '</span>' +
+                    '<span class="m">' + mark + ' ' + o.ko + ' · ' + o.tag + '</span>';
+      d.onclick = ()=> speak(w);
+      list.appendChild(d);
+    }
+  }
+}
+
+/* =====================================================================
+   ROGUELIKE RUN
+   ===================================================================== */
+function startRun(){
+  S.floors   = generateMap();
+  S.floorIdx = 0;
+  S.gold     = 0;
+  S.relics   = [];
+  S.relicMeta = {};
+  S.cleared  = [];          // 층별로 고른 노드 index
+  S.phoenixUsed = false;
+  S.skipsMax = diff().skips;
+  S.skips    = S.skipsMax;
+  showScreen("map");
+  AUDIO.scene("map");
+  renderMap();
+}
+
+function renderMap(){
+  AUDIO.scene("map");            // 맵이 그려질 때는 항상 탐험 음악으로
+  $("map-floor").textContent = Math.min(S.floorIdx + 1, RUN_FLOORS);
+  $("map-hp").textContent    = S.playerHP + "/" + S.playerMax;
+  $("map-gold").textContent  = S.gold;
+  $("map-lv").textContent    = S.level;
+  updateRelicBar();
+
+  const box = $("map-scroll");
+  box.innerHTML = "";
+  S.floors.forEach((nodes, f)=>{
+    const row = document.createElement("div");
+    row.className = "floor" + (f === S.floorIdx ? " cur" : "");
+    const label = BOSS_FLOORS.includes(f) ? "BOSS" : (f+1);
+    row.innerHTML = '<div class="fno">' + label + '</div>';
+    const holder = document.createElement("div");
+    holder.className = "nodes";
+    nodes.forEach((n, i)=>{
+      const d = document.createElement("div");
+      let cls = "node";
+      if(n.type === "boss") cls += " boss";
+      if(f < S.floorIdx) cls += (S.cleared[f] === i ? " done" : " skipped");
+      d.className = cls;
+      d.innerHTML = '<span class="ne">' + icon(n.emoji) + '</span>' +
+                    '<span class="nn">' + nodeName(n) + '</span>' +
+                    '<span class="ns">' + nodeSub(n) + '</span>';
+      if(f === S.floorIdx) d.onclick = ()=> enterNode(i);
+      holder.appendChild(d);
+    });
+    row.appendChild(holder);
+    box.appendChild(row);
+  });
+  const cur = box.querySelector(".floor.cur");
+  if(cur) cur.scrollIntoView({ block: "center" });
+}
+
+function nodeName(n){
+  return { battle:"전투", elite:"엘리트", boss:"보스",
+           shop:"상점", rest:"휴식", event:"이벤트", treasure:"보물" }[n.type];
+}
+function nodeSub(n){
+  if(n.type === "battle" || n.type === "elite" || n.type === "boss")
+    return (n.base ? n.base.ko : "") + " · HP " + n.hp;
+  return { shop:"골드 사용", rest:"정비", event:"???", treasure:"유물" }[n.type];
+}
+
+function updateRelicBar(){
+  const bar = $("relic-bar");
+  if(!bar || !S) return;
+  if(!S.relics || S.relics.length === 0){
+    bar.innerHTML = '<span class="none">유물 없음 — 전투·보물·상점에서 얻습니다</span>';
+    return;
+  }
+  bar.innerHTML = "";
+  const cnt = document.createElement("span");
+  cnt.className = "rl-count";
+  cnt.textContent = "유물 " + S.relics.length + "개 ▸";
+  cnt.title = "클릭하면 전체 목록을 봅니다 (R)";
+  cnt.onclick = ()=> openRelicBook();
+  bar.appendChild(cnt);
+
+  S.relics.forEach(id=>{
+    const r = relicById(id);
+    if(!r) return;
+    const floor = (S.relicMeta && S.relicMeta[id]) || null;
+    const d = document.createElement("div");
+    d.className = "rl";
+    d.innerHTML = icon(r.ic) +
+      '<div class="rl-tip"><b>' + r.nm + '</b><span>' + r.ds + '</span>' +
+      (floor ? '<em>' + floor + '층에서 획득</em>' : '') +
+      '<em style="color:var(--dim)">클릭하면 전체 목록</em></div>';
+    d.onclick = ()=> openRelicBook(id);
+    bar.appendChild(d);
+  });
+}
+
+/* 보유한 유물 전체를 자세히 본다 — 맵에서만 열리며 층을 진행시키지 않는다 */
+function openRelicBook(highlightId){
+  if(!S) return;
+  $("pn-emoji").innerHTML = icon("treasure");
+  $("pn-title").textContent = "보유 유물";
+  $("pn-sub").textContent = S.relics.length
+    ? "지금 적용 중인 효과입니다 (" + S.relics.length + "개)"
+    : "아직 얻은 유물이 없습니다. 전투 보상·보물·상점에서 얻을 수 있습니다.";
+
+  const box = $("pn-opts");
+  box.innerHTML = "";
+  S.relics.forEach(id=>{
+    const r = relicById(id);
+    if(!r) return;
+    const floor = (S.relicMeta && S.relicMeta[id]) || null;
+    const d = document.createElement("div");
+    d.className = "relic-row" + (id === highlightId ? " hl" : "");
+    d.innerHTML = '<span class="ic">' + icon(r.ic) + '</span><span class="tx"><b>' + r.nm + '</b>' +
+      '<span class="ds">' + r.ds + '</span>' +
+      (floor ? '<span class="fl">' + floor + '층에서 획득</span>' : '') + '</span>';
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = '<button class="ov-btn" onclick="closePanel()">닫기</button>';
+  $("panel").classList.add("show");
+}
+
+/* 패널만 닫는다 (층 진행 없음) */
+function closePanel(){ $("panel").classList.remove("show"); }
+
+function enterNode(i){
+  const node = S.floors[S.floorIdx][i];
+  S.curNodeIdx = i;
+  if(node.type === "battle" || node.type === "elite" || node.type === "boss"){
+    startEncounter(node);
+  } else if(node.type === "shop"){
+    openShop();
+  } else if(node.type === "rest"){
+    openRest();
+  } else if(node.type === "event"){
+    openEvent();
+  } else if(node.type === "treasure"){
+    openTreasure();
+  }
+}
+
+function startEncounter(node){
+  const nm = node.base || {};
+  S.enc = {
+    emoji: node.emoji, hp: node.hp, dmg: node.dmg, tier: node.tier,
+    time: node.type === "boss" ? 15000 : 13000,
+    gims: node.gims || [],
+    gim: node.gim || (node.type === "elite" ? "엘리트" : "일반"),
+    gimDesc: node.gimDesc || (node.type === "boss" ? "구간 보스" : "특별한 능력 없음"),
+    en: nm.en, es: nm.es, ko: nm.ko, kind: node.type, gold: node.gold, final: node.final
+  };
+  S.bossHP = S.enc.hp; S.bossMax = S.enc.hp;
+  S.hasteStacks = 0;
+  S.pot = 0; S.potStreak = 0;      // 전리품은 전투마다 새로 쌓는다
+  updatePotUI();
+  S.skipsMax = diff().skips + (hasRelic("map") ? 2 : 0);
+  S.skips = S.skipsMax;
+  updateSkipUI();
+  S.queue = makeQueue(S.enc.tier);
+
+  $("stage-label").textContent = (S.floorIdx+1) + "층 / " + RUN_FLOORS + " · " + diff().label;
+  $("boss-emoji").innerHTML = icon(S.enc.emoji);
+  $("boss-name").innerHTML = (S.enc[LANG] || "") + ' <small>· ' + (S.enc.ko||"") + '</small>';
+  $("boss-gimmick").textContent = S.enc.gim;
+  $("boss-gimmick").classList.toggle("on", (S.enc.gims || []).length > 0);
+  updateBars(); updateHUD();
+  showScreen("battle");
+
+  $("banner-emoji").innerHTML = icon(S.enc.emoji);
+  $("banner-title").textContent = { battle:"전투!", elite:"엘리트!", boss:"보스!" }[S.enc.kind];
+  $("banner-name").textContent = (S.enc[LANG]||"") + " · " + (S.enc.ko||"");
+  $("banner-sub").textContent = S.enc.gim + " — " + S.enc.gimDesc;
+  AUDIO.sfx("encounter", S.enc.kind);
+  AUDIO.scene(S.enc.kind === "boss" ? "boss" : (S.enc.kind === "elite" ? "elite" : "battle"));
+  $("banner").classList.add("show");
+  locked = true;
+  setTimeout(()=>{ $("banner").classList.remove("show"); locked = false; nextWord(); }, 1700);
+}
+
+/* 전투 승리 → 전리품 정산 → 유물 → 골드 도박 */
+function encounterCleared(){
+  const e = S.enc;
+  bankPot(true);                                  // 남은 전리품은 전투 종료 시 확정
+  if(e.final){ endGame(true); return; }
+
+  S.pendingGold = Math.round(e.gold[0] + Math.random()*(e.gold[1]-e.gold[0]));
+  S.gambleMul = 1;
+  S.gambleRound = 0;
+
+  const relicCount = e.kind === "battle" ? (Math.random() < 0.3 ? 1 : 0) : 1;
+  const choices = relicCount ? randomRelics(3) : [];
+  if(choices.length) showRelicChoice(choices);
+  else showGoldSettle();
+}
+
+function showRelicChoice(choices){
+  $("pn-emoji").innerHTML = icon("flag");
+  $("pn-title").textContent = "승리!";
+  $("pn-sub").textContent = "유물 하나를 고르세요";
+  const box = $("pn-opts"); box.innerHTML = "";
+  choices.forEach(r=>{
+    const d = document.createElement("div");
+    d.className = "opt";
+    d.innerHTML = '<span class="ic">'+icon(r.ic)+'</span><span class="tx"><b>'+r.nm+'</b><span>'+r.ds+'</span></span>';
+    d.onclick = ()=>{ giveRelic(r.id); showGoldSettle(); };
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = '<button class="ov-btn ghost" onclick="showGoldSettle()">받지 않는다</button>';
+  $("panel").classList.add("show");
+}
+
+/* 골드 정산 — 안전하게 챙기거나, 두 배로 걸거나 (전투당 한 번만) */
+const MAX_GAMBLE_ROUNDS = 1;
+
+function showGoldSettle(){
+  const stake = S.pendingGold * S.gambleMul;
+  // 초보자 모드에는 도박 요소가 없다
+  const canBet = !NOVICE && S.gambleRound < MAX_GAMBLE_ROUNDS;
+
+  $("pn-emoji").innerHTML = icon((NOVICE || canBet) ? "box" : "evDice");
+  $("pn-title").textContent = canBet ? "전투 보상" : (NOVICE ? "전투 보상" : "도박 성공");
+  $("pn-sub").innerHTML =
+    '<div class="stake">' + stake + 'G</div>' +
+    '<div class="stake-sub">' +
+      (NOVICE
+        ? "보상을 챙기고 다음 층으로 이동합니다."
+        : canBet
+          ? "안전하게 챙기거나, 단어 하나에 걸고 두 배로 불릴 수 있습니다. 기회는 전투당 한 번뿐입니다."
+          : "두 배로 불렸습니다. 도박은 전투당 한 번이니 여기까지입니다.") +
+    '</div>';
+
+  const box = $("pn-opts"); box.innerHTML = "";
+  const safe = document.createElement("div");
+  safe.className = "opt";
+  safe.innerHTML = '<span class="ic">'+icon("box")+'</span><span class="tx"><b>챙기고 떠난다</b>' +
+                   '<span>골드 ' + stake + ' 확정.' + (canBet ? " 확실한 선택입니다." : "") + '</span></span>';
+  safe.onclick = ()=>{ S.gold += stake; closePanelToMap(); };
+  box.appendChild(safe);
+
+
+  if(canBet){
+    const bet = document.createElement("div");
+    bet.className = "opt";
+    bet.innerHTML = '<span class="ic">'+icon("evDice")+'</span><span class="tx"><b>두 배로 건다 (' + (stake*2) + ')</b>' +
+                    '<span>단어 하나를 맞히면 두 배, 틀리면 <b style="color:var(--warn)">전부 잃습니다</b>.</span></span>';
+    bet.onclick = ()=> startGamble();
+    box.appendChild(bet);
+  }
+  $("pn-foot").innerHTML = (canBet || NOVICE) ? ""
+    : '<div class="encourage">욕심은 여기까지. 다음 전투에서 또 기회가 옵니다.</div>';
+  $("panel").classList.add("show");
+}
+
+/* 도박 — 단어 하나에 전부를 건다 */
+let gambleTimer = null;
+function startGamble(){
+  const bank = L().bank[Math.min(5, (foe().tier || 1))] || L().bank[1];
+  // 최소한 한 번은 본 단어 중에서 고른다 (아예 모르는 단어로 도박시키지 않는다)
+  const known = bank.filter(x => masteryOf(x[0]) >= 1);
+  const pickFrom = known.length >= 3 ? known : bank;
+  const w = pickFrom[Math.floor(Math.random()*pickFrom.length)];
+  S.gambleWord = { w:w[0], ko:w[1], tag:w[2] };
+
+  const stake = S.pendingGold * S.gambleMul;
+  const plain = norm(w[0]);
+  const shown = plain.split("").map((c,i)=> i === 0 ? c : "_").join(" ");
+
+  $("pn-emoji").innerHTML = icon("evDice");
+  $("pn-title").textContent = "판돈 " + (stake*2);
+  $("pn-sub").innerHTML = '<div class="stake-sub">맞히면 ' + (stake*2) + ', 틀리면 0. 제한시간 안에 입력하세요.</div>' +
+    '<div class="gamble-word">' + w[1] + '</div>' +
+    '<div class="gamble-hint">' + shown + '  <span style="font-size:12px;color:var(--dim);letter-spacing:0">(' + plain.length + '글자)</span></div>' +
+    '<div id="gamble-timer"><div id="gamble-fill"></div></div>' +
+    '<input id="gamble-input" autocomplete="off" spellcheck="false" placeholder="철자를 입력하고 Enter">';
+  $("pn-opts").innerHTML = "";
+  $("pn-foot").innerHTML = '<div class="encourage">지금 물러설 수는 없습니다.</div>';
+  $("panel").classList.add("show");
+
+  const inp = $("gamble-input");
+  inp.focus();
+  inp.onkeydown = (e)=>{ if(e.key === "Enter"){ e.stopPropagation(); resolveGamble(inp.value); } };
+
+  const total = 9000, t0 = performance.now();
+  clearInterval(gambleTimer);
+  gambleTimer = setInterval(()=>{
+    const left = 1 - (performance.now()-t0)/total;
+    const fill = $("gamble-fill");
+    if(!fill){ clearInterval(gambleTimer); return; }
+    if(left <= 0){ clearInterval(gambleTimer); resolveGamble(""); }
+    else fill.style.width = (left*100) + "%";
+  }, 50);
+}
+
+function resolveGamble(raw){
+  clearInterval(gambleTimer);
+  const target = S.gambleWord.w;
+  const ok = same(raw.trim(), target) || (L().hasAccentRule && raw.trim() && norm(raw) === norm(target));
+  const stake = S.pendingGold * S.gambleMul;
+  speak(target);
+
+  if(ok){
+    S.gambleWins++;
+    S.gambleMul *= 2;
+    S.gambleRound++;
+    setMastery(target, Math.min(MAX_STAGE, masteryOf(target) + 1));
+    $("pn-emoji").innerHTML = icon("flag");
+    $("pn-title").innerHTML = '<span class="verdict-win">배짱이 통했다!</span>';
+    $("pn-sub").innerHTML = '<div class="stake">' + (stake*2) + 'G</div>' +
+      '<div class="stake-sub">' + target + ' — 정답입니다.</div>';
+    $("pn-opts").innerHTML = "";
+    $("pn-foot").innerHTML = '<button class="ov-btn" onclick="showGoldSettle()">계속</button>';
+  } else {
+    S.gambleLosses++;
+    S.potLost += stake;
+    S.missed.set(target, Object.assign({}, S.gambleWord, { why: "wrong" }));
+    setMastery(target, Math.max(0, masteryOf(target) - 1));
+    $("pn-emoji").innerHTML = icon("skull");
+    $("pn-title").innerHTML = '<span class="verdict-lose">전부 잃었습니다</span>';
+    $("pn-sub").innerHTML = '<div class="stake-sub">정답은 <b style="color:var(--gold)">' + target + '</b> 였습니다.</div>' +
+      '<div class="encourage">' + stake + ' 골드가 사라졌지만, 이 단어는 확실히 기억에 남았을 겁니다.<br>' +
+      pick2(ENCOURAGE_LOSS) + '</div>';
+    $("pn-opts").innerHTML = "";
+    $("pn-foot").innerHTML = '<button class="ov-btn" onclick="closePanelToMap()">떠난다</button>';
+  }
+}
+
+function closePanelToMap(){
+  $("panel").classList.remove("show");
+  S.cleared[S.floorIdx] = S.curNodeIdx;
+  S.floorIdx++;
+  if(S.floorIdx >= RUN_FLOORS){ endGame(true); return; }
+  showScreen("map");
+  renderMap();
+}
+
+/* ---------- 보물 ---------- */
+function openTreasure(){
+  const choices = randomRelics(3);
+  $("pn-emoji").innerHTML = icon("treasure");
+  $("pn-title").textContent = "보물 상자";
+  $("pn-sub").textContent = choices.length ? "유물 하나를 가져가세요" : "상자는 비어 있었다. 대신 골드 +60";
+  if(!choices.length) S.gold += 60;
+  const box = $("pn-opts"); box.innerHTML = "";
+  choices.forEach(r=>{
+    const d = document.createElement("div");
+    d.className = "opt";
+    d.innerHTML = '<span class="ic">'+icon(r.ic)+'</span><span class="tx"><b>'+r.nm+'</b><span>'+r.ds+'</span></span>';
+    d.onclick = ()=>{ giveRelic(r.id); closePanelToMap(); };
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = '<button class="ov-btn ghost" onclick="closePanelToMap()">그냥 지나간다</button>';
+  $("panel").classList.add("show");
+}
+
+/* ---------- 휴식 ---------- */
+function openRest(){
+  const heal = Math.round(S.playerMax * 0.4);
+  const opts = [
+    { ic:"rest", t:"모닥불", d:"체력을 "+heal+" 회복한다",
+      run:()=>{ S.playerHP = Math.min(S.playerMax, S.playerHP + heal); } },
+    { ic:"gear", t:"장비 손질", d:"모든 스킬 사용 횟수 +1",
+      run:()=>{ Object.keys(S.charges).forEach(k => S.charges[k]++); } },
+    { ic:"rune", t:"명상", d:"EXP +70",
+      run:()=>{ gainExp(70); } }
+  ];
+  $("pn-emoji").innerHTML = icon("rest");
+  $("pn-title").textContent = "휴식처";
+  $("pn-sub").textContent = "하나만 고를 수 있습니다";
+  const box = $("pn-opts"); box.innerHTML = "";
+  opts.forEach(o=>{
+    const d = document.createElement("div");
+    d.className = "opt";
+    d.innerHTML = '<span class="ic">'+icon(o.ic)+'</span><span class="tx"><b>'+o.t+'</b><span>'+o.d+'</span></span>';
+    d.onclick = ()=>{ o.run(); closePanelToMap(); };
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = "";
+  $("panel").classList.add("show");
+}
+
+/* ---------- 이벤트 ---------- */
+function openEvent(){
+  const ev = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+  $("pn-emoji").innerHTML = icon(ev.ic);
+  $("pn-title").textContent = ev.t;
+  $("pn-sub").textContent = ev.d;
+  const box = $("pn-opts"); box.innerHTML = "";
+  ev.opts.forEach(o=>{
+    const poor = o.cost && S.gold < o.cost;
+    const d = document.createElement("div");
+    d.className = "opt" + (poor ? " dis" : "");
+    d.innerHTML = '<span class="ic"></span><span class="tx"><b>'+o.t+'</b><span>'+o.d+'</span></span>' +
+                  (o.cost ? '<span class="price">'+o.cost+'G</span>' : "");
+    if(!poor) d.onclick = ()=>{
+      if(o.cost) S.gold -= o.cost;
+      const msg = o.run() || "";
+      showEventResult(ev.ic, msg);
+    };
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = "";
+  $("panel").classList.add("show");
+}
+
+function showEventResult(ic, msg){
+  $("pn-emoji").innerHTML = icon(ic);
+  $("pn-title").textContent = "결과";
+  $("pn-sub").textContent = msg;
+  $("pn-opts").innerHTML = "";
+  $("pn-foot").innerHTML = '<button class="ov-btn" onclick="closePanelToMap()">계속</button>';
+}
+
+/* ---------- 상점 ---------- */
+function openShop(){
+  const relics = randomRelics(3).map(r => ({
+    kind:"relic", ic:r.ic, t:r.nm, d:r.ds,
+    cost: 55 + Math.floor(Math.random()*45), id:r.id
+  }));
+  const goods = relics.concat([
+    { kind:"heal",  ic:"cross", t:"치유 물약", d:"체력을 45 회복한다", cost:35 },
+    { kind:"maxhp", ic:"heart", t:"생명의 열매", d:"최대 체력 +15 (즉시 회복)", cost:60 },
+    { kind:"skill", ic:"box", t:"스킬 보급", d:"모든 스킬 사용 횟수 +2", cost:50 },
+    { kind:"skip",  ic:"map", t:"지도 조각", d:"건너뛰기 최대 횟수 +2", cost:40 }
+  ]);
+  renderShop(goods, new Set());
+}
+
+function renderShop(goods, sold){
+  AUDIO.scene("shop");
+  $("pn-emoji").innerHTML = icon("shop");
+  $("pn-title").textContent = "상점";
+  $("pn-sub").innerHTML = '보유 골드 <span class="g">' + S.gold + '</span>';
+  const box = $("pn-opts"); box.innerHTML = "";
+  goods.forEach((g, i)=>{
+    const done = sold.has(i);
+    const poor = S.gold < g.cost;
+    const d = document.createElement("div");
+    d.className = "opt" + (done || poor ? " dis" : "");
+    d.innerHTML = '<span class="ic">'+icon(g.ic)+'</span><span class="tx"><b>'+g.t+
+                  (done ? " (구매함)" : "") + '</b><span>'+g.d+'</span></span>' +
+                  '<span class="price">'+g.cost+'G</span>';
+    if(!done && !poor) d.onclick = ()=>{
+      S.gold -= g.cost;
+      sold.add(i);
+      if(g.kind === "relic") giveRelic(g.id);
+      else if(g.kind === "heal")  S.playerHP = Math.min(S.playerMax, S.playerHP + 45);
+      else if(g.kind === "maxhp"){ S.playerMax += 15; S.playerHP += 15; }
+      else if(g.kind === "skill") Object.keys(S.charges).forEach(k => S.charges[k] += 2);
+      else if(g.kind === "skip"){ S.skipsMax += 2; S.skips += 2; }
+      renderShop(goods, sold);
+    };
+    box.appendChild(d);
+  });
+  $("pn-foot").innerHTML = '<button class="ov-btn" onclick="closePanelToMap()">상점을 나선다</button>';
+  $("panel").classList.add("show");
+}
+
+/* ============ INPUT ============ */
+document.addEventListener("keydown", e => {
+  // 맵에서 R 키로 유물 목록 열기 / Esc 로 닫기
+  if($("map").classList.contains("active") && S){
+    const open = $("panel").classList.contains("show");
+    if((e.key === "r" || e.key === "R") && !open){ e.preventDefault(); openRelicBook(); return; }
+    if(e.key === "Escape" && open){ e.preventDefault(); closePanel(); return; }
+  }
+  if(!$("battle").classList.contains("active")) return;
+  const inp = $("word-input");
+  if(e.key === "Enter"){ submit(); return; }
+  if(e.key === "Tab"){ e.preventDefault(); skipWord(); return; }
+  // 타건음 — 글자를 칠 때마다
+  if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) AUDIO.sfx("key");
+  else if(e.key === "Backspace") AUDIO.sfx("back");
+  // 회수는 Esc — 타이핑 중에도 입력창과 충돌하지 않는다 (초보자 모드엔 회수 개념이 없다)
+  if(e.key === "Escape" && !locked && !NOVICE && S && S.pot > 0){
+    e.preventDefault(); bankPot(false); return;
+  }
+  if(["1","2","3","4"].includes(e.key) && !locked){
+    e.preventDefault();
+    // 객관식 단계에서는 숫자키가 보기 선택, 그 외에는 스킬 단축키
+    if(S && S.wstage === 1){ answerChoice(+e.key - 1); return; }
+    const k = Object.keys(SKILLS).find(x => SKILLS[x].key === e.key);
+    if(k){ useSkill(k); return; }
+  }
+  if(e.key === "Backspace" && document.activeElement === inp) S.backspaced = true;
+  if(document.activeElement !== inp && !inp.disabled && e.key.length === 1) inp.focus();
+});
+
+/* ============ 음향 조절 ============ */
+function toggleSfx(){
+  const on = AUDIO.toggleSfx();
+  const b = $("sfx-btn");
+  b.classList.toggle("off", !on);
+  if(on) AUDIO.sfx("key");
+  refocusInput();
+}
+function toggleBgm(){
+  const on = AUDIO.toggleBgm();
+  const b = $("bgm-btn");
+  b.classList.toggle("off", !on);
+  refocusInput();
+}
+function toggleVolPanel(){
+  const p = $("vol-panel");
+  const open = p.classList.toggle("show");
+  $("vol-btn").classList.toggle("act", open);
+  if(!open) refocusInput();
+}
+
+let volPreviewAt = 0, speechPreviewAt = 0;
+function setVol(kind, raw){
+  const v = (+raw) / 100;
+  AUDIO.setVol(kind, v);
+  const id = kind === "master" ? "mst" : kind;
+  $(id + "-val").textContent = Math.round(v * 100);
+
+  // 효과음·전체는 소리를 들려주되 너무 자주 울리지 않게 간격을 둔다
+  if((kind === "sfx" || kind === "master") && v > 0){
+    const now = Date.now();
+    if(now - volPreviewAt > 140){ volPreviewAt = now; AUDIO.sfx("key"); }
+  }
+  // 발음은 실제로 읽어봐야 크기를 가늠할 수 있으니 샘플 단어를 들려준다 (간격을 넉넉히)
+  if(kind === "speech" && v > 0){
+    const now = Date.now();
+    if(now - speechPreviewAt > 900){
+      speechPreviewAt = now;
+      speak((S && S.word && S.word.w) || (LANG === "es" ? "hola" : "hello"));
+    }
+  }
+  // 슬라이더가 0이면 해당 토글도 꺼진 것처럼 보이게 한다
+  if(kind === "sfx") $("sfx-btn").classList.toggle("off", v === 0 || !AUDIO.isSfxOn());
+  if(kind === "bgm") $("bgm-btn").classList.toggle("off", v === 0 || !AUDIO.isBgmOn());
+}
+
+/* 볼륨을 만진 뒤에도 바로 타이핑할 수 있게 입력창으로 포커스를 돌려준다 */
+function refocusInput(){
+  const inp = $("word-input");
+  if($("battle").classList.contains("active") && inp && !inp.disabled &&
+     $("vol-panel") && !$("vol-panel").classList.contains("show")) inp.focus();
+}
+
+/* 패널 밖을 클릭하면 닫는다 */
+document.addEventListener("pointerdown", e => {
+  const ctl = $("audio-ctl");
+  if(ctl && !ctl.contains(e.target) && $("vol-panel").classList.contains("show")){
+    $("vol-panel").classList.remove("show");
+    $("vol-btn").classList.remove("act");
+    refocusInput();
+  }
+});
+
+/* 정적 마크업에 박아둔 data-ico 자리를 라인 아트로 채운다 */
+function paintStaticIcons(){
+  document.querySelectorAll("[data-ico]").forEach(el => { el.innerHTML = icon(el.getAttribute("data-ico")); });
+}
+
+/* init */
+paintStaticIcons();
+pickLang("en");
+pickNovice(false);
+updateCfgLine();
+buildSkillRow();
+AUDIO.scene("title");
+</script>
+</body>
+</html>
